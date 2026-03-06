@@ -102,9 +102,10 @@ describe("queryCopilotQuota", () => {
 
     expect(result).toEqual({
       success: true,
+      mode: "user_quota",
       used: 42,
       total: 300,
-      percentRemaining: 85,
+      percentRemaining: 86,
       resetTimeIso: "2026-02-01T00:00:00.000Z",
     });
     expect(fetchMock).toHaveBeenCalledTimes(1);
@@ -150,6 +151,7 @@ describe("queryCopilotQuota", () => {
 
     expect(result).toEqual({
       success: true,
+      mode: "user_quota",
       used: 12,
       total: 300,
       percentRemaining: 96,
@@ -197,7 +199,7 @@ describe("queryCopilotQuota", () => {
     );
   });
 
-  it("uses the documented organization billing endpoint when organization is configured", async () => {
+  it("uses the documented organization billing endpoint with current billing period params when organization is configured", async () => {
     fsMocks.existsSync.mockImplementation((path) => path === patPath);
     fsMocks.readFileSync.mockReturnValue(
       JSON.stringify({
@@ -209,11 +211,15 @@ describe("queryCopilotQuota", () => {
     );
 
     const fetchMock = vi.fn(async (url: unknown) => {
-      const target = String(url);
+      const target = new URL(String(url));
 
       if (
-        target ===
-        "https://api.github.com/organizations/acme-corp/settings/billing/premium_request/usage?user=alice"
+        target.pathname ===
+        "/organizations/acme-corp/settings/billing/premium_request/usage" &&
+        target.searchParams.get("year") === "2026" &&
+        target.searchParams.get("month") === "1" &&
+        target.searchParams.get("user") === "alice" &&
+        target.searchParams.get("day") === null
       ) {
         return new Response(
           JSON.stringify({
@@ -239,14 +245,82 @@ describe("queryCopilotQuota", () => {
 
     expect(result).toEqual({
       success: true,
+      mode: "organization_usage",
+      organization: "acme-corp",
+      username: "alice",
+      period: {
+        year: 2026,
+        month: 1,
+      },
       used: 9,
-      total: 300,
-      percentRemaining: 97,
       resetTimeIso: "2026-02-01T00:00:00.000Z",
     });
-    expect(String(fetchMock.mock.calls[0]?.[0])).toContain(
-      "/organizations/acme-corp/settings/billing/premium_request/usage?user=alice",
+    const requestUrl = new URL(String(fetchMock.mock.calls[0]?.[0]));
+    expect(requestUrl.pathname).toBe(
+      "/organizations/acme-corp/settings/billing/premium_request/usage",
     );
+    expect(requestUrl.searchParams.get("year")).toBe("2026");
+    expect(requestUrl.searchParams.get("month")).toBe("1");
+    expect(requestUrl.searchParams.get("user")).toBe("alice");
+    expect(requestUrl.searchParams.get("day")).toBeNull();
+  });
+
+  it("treats organization business usage as usage-only when no real limit is available", async () => {
+    fsMocks.existsSync.mockImplementation((path) => path === patPath);
+    fsMocks.readFileSync.mockReturnValue(
+      JSON.stringify({
+        token: "github_pat_123456789",
+        tier: "business",
+        organization: "acme-corp",
+      }),
+    );
+
+    const fetchMock = vi.fn(async (url: unknown) => {
+      const target = new URL(String(url));
+
+      if (
+        target.pathname ===
+        "/organizations/acme-corp/settings/billing/premium_request/usage" &&
+        target.searchParams.get("year") === "2026" &&
+        target.searchParams.get("month") === "1" &&
+        target.searchParams.get("user") === null
+      ) {
+        return new Response(
+          JSON.stringify({
+            organization: "acme-corp",
+            usageItems: [
+              {
+                sku: "Copilot Premium Request",
+                grossQuantity: 27,
+              },
+            ],
+          }),
+          { status: 200 },
+        );
+      }
+
+      return new Response("not found", { status: 404 });
+    });
+
+    vi.stubGlobal("fetch", fetchMock as any);
+
+    const { queryCopilotQuota } = await import("../src/lib/copilot.js");
+    const result = await queryCopilotQuota();
+
+    expect(result).toEqual({
+      success: true,
+      mode: "organization_usage",
+      organization: "acme-corp",
+      username: undefined,
+      period: {
+        year: 2026,
+        month: 1,
+      },
+      used: 27,
+      resetTimeIso: "2026-02-01T00:00:00.000Z",
+    });
+    expect(result && result.success && "total" in result).toBe(false);
+    expect(result && result.success && "percentRemaining" in result).toBe(false);
   });
 
   it("handles snake_case billing response fields", async () => {
@@ -287,6 +361,7 @@ describe("queryCopilotQuota", () => {
 
     expect(result).toEqual({
       success: true,
+      mode: "user_quota",
       used: 9,
       total: 300,
       percentRemaining: 97,
@@ -354,5 +429,10 @@ describe("queryCopilotQuota", () => {
     expect(diagnostics.oauth.configured).toBe(true);
     expect(diagnostics.effectiveSource).toBe("pat");
     expect(diagnostics.override).toBe("pat_overrides_oauth");
+    expect(diagnostics.billingMode).toBe("organization_usage");
+    expect(diagnostics.billingScope).toBe("organization");
+    expect(diagnostics.billingApiAccessLikely).toBe(true);
+    expect(diagnostics.remainingTotalsState).toBe("not_available_from_org_usage");
+    expect(diagnostics.queryPeriod).toEqual({ year: 2026, month: 1 });
   });
 });

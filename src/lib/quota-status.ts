@@ -351,6 +351,20 @@ export async function buildQuotaStatusReport(params: {
   if (copilotDiag.pat.config?.organization) {
     lines.push(`- pat_organization: ${copilotDiag.pat.config.organization}`);
   }
+  lines.push(`- billing_mode: ${copilotDiag.billingMode}`);
+  lines.push(`- billing_scope: ${copilotDiag.billingScope}`);
+  lines.push(`- billing_api_access_likely: ${copilotDiag.billingApiAccessLikely ? "true" : "false"}`);
+  lines.push(`- remaining_totals_state: ${copilotDiag.remainingTotalsState}`);
+  if (copilotDiag.queryPeriod) {
+    lines.push(`- billing_period: ${copilotDiag.queryPeriod.year}-${String(copilotDiag.queryPeriod.month).padStart(2, "0")}`);
+  }
+  if (copilotDiag.usernameFilter) {
+    lines.push(`- username_filter: ${copilotDiag.usernameFilter}`);
+  }
+  if (copilotDiag.billingMode === "organization_usage") {
+    lines.push("- billing_usage_note: organization premium usage for the current billing period");
+    lines.push("- remaining_quota_note: valid PAT access can query billing usage, but pooled org usage does not provide a true per-user remaining quota");
+  }
   if (copilotDiag.pat.error) {
     lines.push(`- pat_error: ${copilotDiag.pat.error}`);
   }

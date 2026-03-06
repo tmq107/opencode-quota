@@ -134,6 +134,10 @@ Organization example:
 
 For organization-managed Copilot plans such as `business` or `enterprise`, `organization` is required. `username` is optional and is only used as the `?user=` filter on the organization report.
 
+Business and enterprise organization mode reports organization-level premium usage for the current billing period. It does not represent a single user's quota, and the available GitHub billing API/config does not provide a reliable way to derive a true per-user remaining premium quota from pooled organization usage.
+
+Run `/quota_status` and check `copilot_quota_auth` to confirm whether the plugin is in `user_quota` mode or `organization_usage` mode. In organization mode, `billing_api_access_likely=true` means the PAT should be able to query billing usage, but it does not mean per-user remaining totals can be computed.
+
 - **Organization PAT permission:** fine-grained PAT with **Organization permissions > Administration > Read**.
 
 Tier options: `free`, `pro`, `pro+`, `business`, `enterprise`
@@ -142,7 +146,9 @@ If both OpenCode Copilot auth and `copilot-quota-token.json` are present, the pl
 
 For personal plans, a PAT is optional. Use it only if you want an explicit tier override for quota totals.
 
-Run `/quota_status` and check `copilot_quota_auth` to confirm `pat_state`, `pat_organization`, candidate paths checked, and `effective_source`/`override`.
+If you need isolated individual Copilot premium tracking, use an account or setup that is billed and managed as a single person instead of relying on pooled organization usage.
+
+Run `/quota_status` and check `copilot_quota_auth` to confirm `pat_state`, `pat_organization`, `billing_mode`, `billing_scope`, candidate paths checked, and `effective_source`/`override`.
 </details>
 
 <details>

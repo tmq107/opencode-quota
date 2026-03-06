@@ -136,7 +136,7 @@ export interface CopilotQuotaConfig {
    * `/organizations/{org}/settings/billing/premium_request/usage`.
    */
   organization?: string;
-  /** Copilot subscription tier (determines monthly quota limit) */
+  /** Copilot subscription tier (used for personal-tier fallback quota math) */
   tier: CopilotTier;
 }
 
@@ -297,12 +297,27 @@ export interface ZaiQuotaResult {
 // Quota Result Types
 // =============================================================================
 
-/** Result from fetching Copilot quota */
+/** Result from fetching per-user Copilot quota */
 export interface CopilotQuotaResult {
   success: true;
+  mode: "user_quota";
   used: number;
   total: number;
   percentRemaining: number;
+  resetTimeIso?: string;
+}
+
+/** Result from fetching organization-scoped Copilot premium usage */
+export interface CopilotOrganizationUsageResult {
+  success: true;
+  mode: "organization_usage";
+  organization: string;
+  username?: string;
+  period: {
+    year: number;
+    month: number;
+  };
+  used: number;
   resetTimeIso?: string;
 }
 
@@ -335,7 +350,11 @@ export interface QuotaError {
 }
 
 /** Combined quota result */
-export type CopilotResult = CopilotQuotaResult | QuotaError | null;
+export type CopilotResult =
+  | CopilotQuotaResult
+  | CopilotOrganizationUsageResult
+  | QuotaError
+  | null;
 export type GoogleResult = GoogleQuotaResult | QuotaError | null;
 export type ZaiResult = ZaiQuotaResult | QuotaError | null;
 export type ChutesResult =

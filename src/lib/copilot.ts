@@ -13,6 +13,7 @@ import type {
   AuthData,
   CopilotAuthData,
   CopilotQuotaConfig,
+  CopilotOrganizationUsageResult,
   CopilotQuotaResult,
   CopilotResult,
   CopilotTier,
@@ -35,6 +36,8 @@ type CopilotAuthKeyName =
   | "github-copilot-chat";
 type CopilotPatTokenKind = "github_pat" | "ghp" | "other";
 type EffectiveCopilotAuthSource = "pat" | "oauth" | "none";
+type CopilotBillingMode = "user_quota" | "organization_usage" | "none";
+type CopilotRemainingTotalsState = "available" | "not_available_from_org_usage" | "unavailable";
 
 export type CopilotPatState = "absent" | "invalid" | "valid";
 
@@ -57,6 +60,15 @@ export interface CopilotQuotaAuthDiagnostics {
   };
   effectiveSource: EffectiveCopilotAuthSource;
   override: "pat_overrides_oauth" | "none";
+  billingMode: CopilotBillingMode;
+  billingScope: "user" | "organization" | "none";
+  billingApiAccessLikely: boolean;
+  remainingTotalsState: CopilotRemainingTotalsState;
+  queryPeriod?: {
+    year: number;
+    month: number;
+  };
+  usernameFilter?: string;
 }
 
 interface BillingUsageItem {
@@ -85,6 +97,12 @@ interface GitHubViewerResponse {
   login?: string;
 }
 
+interface BillingPeriodQuery {
+  year: number;
+  month: number;
+  day?: number;
+}
+
 const COPILOT_PLAN_LIMITS: Record<CopilotTier, number> = {
   free: 50,
   pro: 300,
@@ -111,6 +129,43 @@ function classifyPatTokenKind(token: string): CopilotPatTokenKind {
   if (token.startsWith("github_pat_")) return "github_pat";
   if (token.startsWith("ghp_")) return "ghp";
   return "other";
+}
+
+function isOrganizationBillingConfig(config: CopilotQuotaConfig): boolean {
+  return (
+    (config.tier === "business" || config.tier === "enterprise") &&
+    typeof config.organization === "string" &&
+    config.organization.length > 0
+  );
+}
+
+function getCurrentBillingPeriod(now: Date = new Date()): BillingPeriodQuery {
+  return {
+    year: now.getFullYear(),
+    month: now.getMonth() + 1,
+  };
+}
+
+function buildBillingPeriodQueryParams(
+  period: BillingPeriodQuery,
+  options?: {
+    includeDay?: boolean;
+    username?: string;
+  },
+): URLSearchParams {
+  const searchParams = new URLSearchParams();
+  searchParams.set("year", String(period.year));
+  searchParams.set("month", String(period.month));
+
+  if (options?.includeDay && typeof period.day === "number") {
+    searchParams.set("day", String(period.day));
+  }
+
+  if (options?.username) {
+    searchParams.set("user", options.username);
+  }
+
+  return searchParams;
 }
 
 export function getCopilotPatConfigCandidatePaths(): string[] {
@@ -236,10 +291,21 @@ function selectCopilotAuth(authData: AuthData | null): {
 export function getCopilotQuotaAuthDiagnostics(authData: AuthData | null): CopilotQuotaAuthDiagnostics {
   const pat = readQuotaConfigWithMeta();
   const { auth, keyName } = selectCopilotAuth(authData);
+  const billingMode: CopilotBillingMode =
+    pat.state === "valid" && pat.config
+      ? isOrganizationBillingConfig(pat.config)
+        ? "organization_usage"
+        : "user_quota"
+      : auth
+        ? "user_quota"
+        : "none";
 
   let effectiveSource: EffectiveCopilotAuthSource = "none";
   if (pat.state === "valid") effectiveSource = "pat";
   else if (auth) effectiveSource = "oauth";
+
+  const queryPeriod =
+    billingMode === "organization_usage" ? getCurrentBillingPeriod() : undefined;
 
   return {
     pat,
@@ -251,6 +317,22 @@ export function getCopilotQuotaAuthDiagnostics(authData: AuthData | null): Copil
     },
     effectiveSource,
     override: pat.state === "valid" && auth ? "pat_overrides_oauth" : "none",
+    billingMode,
+    billingScope:
+      billingMode === "organization_usage"
+        ? "organization"
+        : billingMode === "user_quota"
+          ? "user"
+          : "none",
+    billingApiAccessLikely: effectiveSource !== "none",
+    remainingTotalsState:
+      billingMode === "organization_usage"
+        ? "not_available_from_org_usage"
+        : billingMode === "user_quota"
+          ? "available"
+          : "unavailable",
+    queryPeriod,
+    usernameFilter: pat.state === "valid" ? pat.config?.username : undefined,
   };
 }
 
@@ -350,10 +432,17 @@ async function resolveGitHubUsername(token: string): Promise<string> {
 function getBillingRequestUrl(params: {
   organization?: string;
   username?: string;
+  billingPeriod?: BillingPeriodQuery;
 }): string {
   if (params.organization) {
     const base = `${GITHUB_API_BASE_URL}/organizations/${encodeURIComponent(params.organization)}/settings/billing/premium_request/usage`;
-    return params.username ? `${base}?user=${encodeURIComponent(params.username)}` : base;
+    const searchParams = buildBillingPeriodQueryParams(
+      params.billingPeriod ?? getCurrentBillingPeriod(),
+      {
+        username: params.username,
+      },
+    );
+    return `${base}?${searchParams.toString()}`;
   }
 
   if (!params.username) {
@@ -367,11 +456,13 @@ async function fetchPremiumRequestUsage(params: {
   token: string;
   username?: string;
   organization?: string;
-}): Promise<BillingUsageResponse> {
+}): Promise<{ response: BillingUsageResponse; billingPeriod?: BillingPeriodQuery }> {
   const username = params.organization ? params.username : params.username ?? (await resolveGitHubUsername(params.token));
+  const billingPeriod = params.organization ? getCurrentBillingPeriod() : undefined;
   const url = getBillingRequestUrl({
     organization: params.organization,
     username,
+    billingPeriod,
   });
 
   let unauthorized: { status: number; message: string } | null = null;
@@ -380,7 +471,10 @@ async function fetchPremiumRequestUsage(params: {
     const result = await fetchGitHubRestJsonOnce<BillingUsageResponse>(url, params.token, scheme);
 
     if (result.ok) {
-      return result.data;
+      return {
+        response: result.data,
+        billingPeriod,
+      };
     }
 
     if (result.status === 401) {
@@ -409,14 +503,11 @@ function computePercentRemainingFromUsed(params: { used: number; total: number }
   const { used, total } = params;
   if (!Number.isFinite(total) || total <= 0) return 0;
   if (!Number.isFinite(used) || used <= 0) return 100;
-  const usedPct = Math.max(0, Math.min(100, Math.ceil((used / total) * 100)));
-  return 100 - usedPct;
+  const remaining = Math.max(0, total - Math.max(0, used));
+  return Math.max(0, Math.min(100, Math.floor((remaining * 100) / total)));
 }
 
-function toQuotaResultFromBilling(
-  response: BillingUsageResponse,
-  fallbackTier?: CopilotTier,
-): CopilotQuotaResult {
+function getPremiumUsageItems(response: BillingUsageResponse): BillingUsageItem[] {
   const items = Array.isArray(response.usageItems)
     ? response.usageItems
     : Array.isArray(response.usage_items)
@@ -440,10 +531,32 @@ function toQuotaResultFromBilling(
     throw new Error("Billing API returned empty usageItems array for Copilot premium requests.");
   }
 
-  const used = premiumItems.reduce((sum, item) => {
+  return premiumItems;
+}
+
+function sumUsedUnits(items: BillingUsageItem[]): number {
+  return items.reduce((sum, item) => {
     const gross = item.grossQuantity ?? item.gross_quantity ?? 0;
     return sum + (typeof gross === "number" ? gross : 0);
   }, 0);
+}
+
+function getBillingResponsePeriod(
+  response: BillingUsageResponse,
+  fallbackPeriod: BillingPeriodQuery,
+): { year: number; month: number } {
+  const timePeriod = response.timePeriod ?? response.time_period;
+  const year = typeof timePeriod?.year === "number" ? timePeriod.year : fallbackPeriod.year;
+  const month = typeof timePeriod?.month === "number" ? timePeriod.month : fallbackPeriod.month;
+  return { year, month };
+}
+
+function toUserQuotaResultFromBilling(
+  response: BillingUsageResponse,
+  fallbackTier?: CopilotTier,
+): CopilotQuotaResult {
+  const premiumItems = getPremiumUsageItems(response);
+  const used = sumUsedUnits(premiumItems);
 
   const apiLimits = premiumItems
     .map((item) => item.limit)
@@ -459,9 +572,29 @@ function toQuotaResultFromBilling(
 
   return {
     success: true,
+    mode: "user_quota",
     used,
     total,
     percentRemaining: computePercentRemainingFromUsed({ used, total }),
+    resetTimeIso: getApproxNextResetIso(),
+  };
+}
+
+function toOrganizationUsageResultFromBilling(params: {
+  response: BillingUsageResponse;
+  organization: string;
+  username?: string;
+  billingPeriod: BillingPeriodQuery;
+}): CopilotOrganizationUsageResult {
+  const premiumItems = getPremiumUsageItems(params.response);
+
+  return {
+    success: true,
+    mode: "organization_usage",
+    organization: params.organization,
+    username: params.username,
+    period: getBillingResponsePeriod(params.response, params.billingPeriod),
+    used: sumUsedUnits(premiumItems),
     resetTimeIso: getApproxNextResetIso(),
   };
 }
@@ -505,12 +638,19 @@ export async function queryCopilotQuota(): Promise<CopilotResult> {
     if (scopeError) return toQuotaError(scopeError);
 
     try {
-      const response = await fetchPremiumRequestUsage({
+      const { response, billingPeriod } = await fetchPremiumRequestUsage({
         token: pat.config.token,
         username: pat.config.username,
         organization: pat.config.organization,
       });
-      return toQuotaResultFromBilling(response, pat.config.tier);
+      return isOrganizationBillingConfig(pat.config)
+        ? toOrganizationUsageResultFromBilling({
+          response,
+          organization: pat.config.organization!,
+          username: pat.config.username,
+          billingPeriod: billingPeriod ?? getCurrentBillingPeriod(),
+        })
+        : toUserQuotaResultFromBilling(response, pat.config.tier);
     } catch (error) {
       return toQuotaError(error instanceof Error ? error.message : String(error));
     }
@@ -531,8 +671,8 @@ export async function queryCopilotQuota(): Promise<CopilotResult> {
 
   for (const token of tokenCandidates) {
     try {
-      const response = await fetchPremiumRequestUsage({ token });
-      return toQuotaResultFromBilling(response);
+      const { response } = await fetchPremiumRequestUsage({ token });
+      return toUserQuotaResultFromBilling(response);
     } catch (error) {
       lastError = error instanceof Error ? error.message : String(error);
     }
@@ -547,6 +687,10 @@ export async function queryCopilotQuota(): Promise<CopilotResult> {
 export function formatCopilotQuota(result: CopilotResult): string | null {
   if (!result || !result.success) {
     return null;
+  }
+
+  if (result.mode === "organization_usage") {
+    return `Copilot Org ${result.used} used`;
   }
 
   const percentUsed = 100 - result.percentRemaining;
