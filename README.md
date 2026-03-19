@@ -216,6 +216,11 @@ No extra setup is required if OpenCode already has OpenAI or ChatGPT auth config
 
 Cursor support requires the `opencode-cursor` plugin and stays local-only and deterministic once `@rama_nigg/open-cursor` is installed in OpenCode.
 
+Recommended install path:
+
+- Follow Option B from the upstream [`opencode-cursor` README](https://github.com/Nomadcxx/opencode-cursor).
+- Keep the Cursor model list in sync with `cursor-agent models`.
+
 Current behavior:
 
 - Detects Cursor usage from OpenCode history when the current model or stored message model is `cursor-acp/*`
