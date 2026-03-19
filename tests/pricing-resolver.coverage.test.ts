@@ -104,4 +104,38 @@ describe("resolvePricingKey snapshot coverage", () => {
     expect(lookupCost("moonshotai", "kimi-k2.5")).not.toBeNull();
     expect(lookupCost("openai", "gpt-4o-mini")).not.toBeNull();
   });
+
+  it("maps cursor local and api-pool models into deterministic pricing keys", () => {
+    const auto = resolvePricingKey({
+      providerID: "cursor-acp",
+      modelID: "cursor-acp/auto",
+    });
+    expect(auto.ok).toBe(true);
+    if (!auto.ok) return;
+    expect(auto.key).toEqual({ provider: "cursor", model: "auto" });
+
+    const composer = resolvePricingKey({
+      providerID: "cursor-acp",
+      modelID: "cursor-acp/composer-1.5",
+    });
+    expect(composer.ok).toBe(true);
+    if (!composer.ok) return;
+    expect(composer.key).toEqual({ provider: "cursor", model: "composer" });
+
+    const gpt = resolvePricingKey({
+      providerID: "cursor-acp",
+      modelID: "cursor-acp/gpt-5.4-high",
+    });
+    expect(gpt.ok).toBe(true);
+    if (!gpt.ok) return;
+    expect(gpt.key).toEqual({ provider: "openai", model: "gpt-5.4" });
+
+    const anthropic = resolvePricingKey({
+      providerID: "cursor-acp",
+      modelID: "cursor-acp/sonnet-4.6-thinking",
+    });
+    expect(anthropic.ok).toBe(true);
+    if (!anthropic.ok) return;
+    expect(anthropic.key).toEqual({ provider: "anthropic", model: "claude-sonnet-4-6" });
+  });
 });

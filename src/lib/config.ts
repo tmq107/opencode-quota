@@ -5,7 +5,7 @@
  * Fallback: reads local config files directly.
  */
 
-import type { QuotaToastConfig, GoogleModelId } from "./types.js";
+import type { CursorQuotaPlan, QuotaToastConfig, GoogleModelId } from "./types.js";
 import { DEFAULT_CONFIG } from "./types.js";
 import { parseJsonOrJsonc } from "./jsonc.js";
 import { normalizeQuotaProviderId } from "./provider-metadata.js";
@@ -30,6 +30,13 @@ export function createLoadConfigMeta(): LoadConfigMeta {
  */
 function isValidGoogleModelId(id: unknown): id is GoogleModelId {
   return typeof id === "string" && ["G3PRO", "G3FLASH", "CLAUDE", "G3IMAGE"].includes(id);
+}
+
+function isValidCursorQuotaPlan(plan: unknown): plan is CursorQuotaPlan {
+  return (
+    typeof plan === "string" &&
+    ["none", "pro", "pro-plus", "ultra"].includes(plan)
+  );
 }
 
 /**
@@ -100,6 +107,22 @@ export async function loadConfig(
         quotaToastConfig.alibabaCodingPlanTier === "pro"
           ? quotaToastConfig.alibabaCodingPlanTier
           : DEFAULT_CONFIG.alibabaCodingPlanTier,
+      cursorPlan: isValidCursorQuotaPlan(quotaToastConfig.cursorPlan)
+        ? quotaToastConfig.cursorPlan
+        : DEFAULT_CONFIG.cursorPlan,
+      cursorIncludedApiUsd:
+        typeof quotaToastConfig.cursorIncludedApiUsd === "number" &&
+        Number.isFinite(quotaToastConfig.cursorIncludedApiUsd) &&
+        quotaToastConfig.cursorIncludedApiUsd > 0
+          ? quotaToastConfig.cursorIncludedApiUsd
+          : undefined,
+      cursorBillingCycleStartDay:
+        typeof quotaToastConfig.cursorBillingCycleStartDay === "number" &&
+        Number.isInteger(quotaToastConfig.cursorBillingCycleStartDay) &&
+        quotaToastConfig.cursorBillingCycleStartDay >= 1 &&
+        quotaToastConfig.cursorBillingCycleStartDay <= 28
+          ? quotaToastConfig.cursorBillingCycleStartDay
+          : undefined,
       showOnIdle:
         typeof quotaToastConfig.showOnIdle === "boolean"
           ? quotaToastConfig.showOnIdle

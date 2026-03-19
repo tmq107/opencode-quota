@@ -10,12 +10,16 @@ describe("provider-metadata", () => {
     expect(normalizeQuotaProviderId("github-copilot")).toBe("copilot");
     expect(normalizeQuotaProviderId("copilot-chat")).toBe("copilot");
     expect(normalizeQuotaProviderId("github-copilot-chat")).toBe("copilot");
+    expect(normalizeQuotaProviderId("cursor-acp")).toBe("cursor");
+    expect(normalizeQuotaProviderId("open-cursor")).toBe("cursor");
+    expect(normalizeQuotaProviderId("@rama_nigg/open-cursor")).toBe("cursor");
     expect(normalizeQuotaProviderId("qwen")).toBe("qwen-code");
     expect(normalizeQuotaProviderId("alibaba")).toBe("alibaba-coding-plan");
   });
 
   it("returns display labels for known providers", () => {
     expect(getQuotaProviderDisplayLabel("google-antigravity")).toBe("Google");
+    expect(getQuotaProviderDisplayLabel("cursor")).toBe("Cursor");
     expect(getQuotaProviderDisplayLabel("alibaba-coding-plan")).toBe("Alibaba Coding Plan");
     expect(getQuotaProviderDisplayLabel("zai")).toBe("Z.ai");
     expect(getQuotaProviderDisplayLabel("something-else")).toBe("something-else");

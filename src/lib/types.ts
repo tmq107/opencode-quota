@@ -8,6 +8,7 @@
 
 /** Google model identifiers */
 export type GoogleModelId = "G3PRO" | "G3FLASH" | "CLAUDE" | "G3IMAGE";
+export type CursorQuotaPlan = "none" | "pro" | "pro-plus" | "ultra";
 
 /** Plugin configuration from opencode.json experimental.quotaToast */
 export interface QuotaToastConfig {
@@ -42,6 +43,9 @@ export interface QuotaToastConfig {
 
   googleModels: GoogleModelId[];
   alibabaCodingPlanTier: AlibabaCodingPlanTier;
+  cursorPlan: CursorQuotaPlan;
+  cursorIncludedApiUsd?: number;
+  cursorBillingCycleStartDay?: number;
   showOnIdle: boolean;
   showOnQuestion: boolean;
   showOnCompact: boolean;
@@ -82,6 +86,7 @@ export const DEFAULT_CONFIG: QuotaToastConfig = {
   // If Google Antigravity is enabled, default to Claude only.
   googleModels: ["CLAUDE"],
   alibabaCodingPlanTier: "lite",
+  cursorPlan: "none",
 
   showOnIdle: true,
   showOnQuestion: true,

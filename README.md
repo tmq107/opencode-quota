@@ -5,9 +5,9 @@
 - Automatic quota toasts after assistant responses
 - Manual `/quota` and `/tokens_*` commands for deeper local reporting with zero context window pollution
 
-**Quota provider supports**: GitHub Copilot, OpenAI (Plus/Pro), Qwen Code, Alibaba Coding Plan, Chutes AI, Firmware AI, Google Antigravity, and Z.ai coding plan.
+**Quota provider supports**: GitHub Copilot, OpenAI (Plus/Pro), Cursor, Qwen Code, Alibaba Coding Plan, Chutes AI, Firmware AI, Google Antigravity, and Z.ai coding plan.
 
-**Token provider supports**: All models and providers in [models.dev](https://models.dev).
+**Token provider supports**: All models and providers in [models.dev](https://models.dev), plus deterministic local pricing for Cursor Auto/Composer and Cursor model aliases that are not on models.dev.
 
 
 ![Image of quota toasts](https://github.com/slkiser/opencode-quota/blob/main/toast.png)
@@ -73,6 +73,18 @@ Qwen quota support depends on the companion auth plugin:
 }
 ```
 
+### Cursor
+
+Cursor model support works with the Cursor OpenCode provider integration, for example:
+
+```jsonc
+{
+  "plugin": ["cursor-acp", "@slkiser/opencode-quota"]
+}
+```
+
+Quota and `/tokens_*` output are computed from local OpenCode session history. The plugin does not call Cursor model APIs to build reports.
+
 ## Commands
 
 | Command | What it shows |
@@ -135,6 +147,7 @@ If Alibaba Coding Plan auth does not include a `tier`, you can set the fallback 
 | --- | --- | --- |
 | GitHub Copilot | Usually yes | Add `copilot-quota-token.json` only for managed org or enterprise billing |
 | OpenAI | Yes | None |
+| Cursor | Usually yes | Optional `cursorPlan`, `cursorIncludedApiUsd`, and `cursorBillingCycleStartDay` for monthly API budget tracking |
 | Qwen Code | Needs `opencode-qwencode-auth` | Local free-tier request estimation |
 | Alibaba Coding Plan | Yes | Local request-count estimation |
 | Firmware AI | Usually yes | Optional API key |
@@ -195,6 +208,52 @@ Useful checks:
 <summary><strong>OpenAI</strong></summary>
 
 No extra setup is required if OpenCode already has OpenAI or ChatGPT auth configured.
+
+</details>
+
+<details>
+<summary><strong>Cursor</strong></summary>
+
+Cursor support is local-only and deterministic.
+
+Current behavior:
+
+- Detects Cursor usage from OpenCode history when the current model or stored message model is `cursor-acp/*`
+- `/tokens_*` maps Cursor API-pool models into official pricing and uses bundled static rates for `auto` and `composer*`
+- `/quota` and toasts estimate the current billing-cycle spend from local OpenCode history
+- Percentage remaining is shown only when you configure `cursorPlan` or `cursorIncludedApiUsd`
+- Billing cycle defaults to the local calendar month unless you set `cursorBillingCycleStartDay`
+
+Notes:
+
+- Session cookies and Cursor team APIs are not required for this local reporting path
+- Unknown future Cursor model ids are surfaced in `/quota_status` under Cursor diagnostics and `unknown_pricing`
+
+Example config for a personal Pro account:
+
+```jsonc
+{
+  "experimental": {
+    "quotaToast": {
+      "cursorPlan": "pro",
+      "cursorBillingCycleStartDay": 7
+    }
+  }
+}
+```
+
+If you need a custom included API budget, override it directly:
+
+```jsonc
+{
+  "experimental": {
+    "quotaToast": {
+      "cursorPlan": "none",
+      "cursorIncludedApiUsd": 120
+    }
+  }
+}
+```
 
 </details>
 
@@ -326,17 +385,21 @@ All plugin settings live under `experimental.quotaToast`.
 | `layout.tinyAt` | `32` | Tiny layout breakpoint |
 | `googleModels` | `["CLAUDE"]` | Google model keys: `CLAUDE`, `G3PRO`, `G3FLASH`, `G3IMAGE` |
 | `alibabaCodingPlanTier` | `"lite"` | Fallback Alibaba Coding Plan tier when auth does not include `tier` |
+| `cursorPlan` | `"none"` | Cursor included API budget preset: `none`, `pro`, `pro-plus`, `ultra` |
+| `cursorIncludedApiUsd` | unset | Override Cursor monthly included API budget in USD |
+| `cursorBillingCycleStartDay` | unset | Local billing-cycle anchor day `1..28`; when unset, Cursor usage resets on the local calendar month |
 | `debug` | `false` | Include debug context in toast output |
 
 ## Token Pricing Snapshot
 
-`/tokens_*` uses a local `models.dev` pricing snapshot.
+`/tokens_*` uses a local `models.dev` pricing snapshot plus bundled static Cursor pricing for Cursor-only pool models.
 
 Behavior:
 
 - A bundled snapshot ships with the plugin for offline use.
 - The plugin can refresh the local runtime snapshot when the data is stale.
 - Reports continue to work if refresh fails.
+- Cursor `auto` and `composer*` pricing is bundled in the plugin because those ids are not on `models.dev`.
 
 Useful environment variables:
 

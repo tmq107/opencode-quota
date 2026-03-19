@@ -4,6 +4,7 @@ export const QUOTA_PROVIDER_LABELS: Readonly<Record<string, string>> = {
   "google-antigravity": "Google",
   firmware: "Firmware",
   chutes: "Chutes",
+  cursor: "Cursor",
   "qwen-code": "Qwen",
   "alibaba-coding-plan": "Alibaba Coding Plan",
   zai: "Z.ai",
@@ -13,6 +14,9 @@ export const QUOTA_PROVIDER_ID_SYNONYMS: Readonly<Record<string, string>> = {
   "github-copilot": "copilot",
   "copilot-chat": "copilot",
   "github-copilot-chat": "copilot",
+  "cursor-acp": "cursor",
+  "open-cursor": "cursor",
+  "@rama_nigg/open-cursor": "cursor",
   qwen: "qwen-code",
   alibaba: "alibaba-coding-plan",
 };

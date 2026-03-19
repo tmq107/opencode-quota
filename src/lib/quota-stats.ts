@@ -13,6 +13,13 @@ import {
   listProvidersForModelId,
   lookupCost,
 } from "./modelsdev-pricing.js";
+import {
+  isCursorModelId,
+  isCursorProviderId,
+  lookupCursorLocalCost,
+  resolveCursorModel,
+} from "./cursor-pricing.js";
+import { calculateUsdFromTokenBuckets } from "./token-cost.js";
 
 // Re-export for consumers
 export { SessionNotFoundError } from "./opencode-storage.js";
@@ -41,7 +48,17 @@ export type UnknownKey = {
 };
 
 export type PricingResolution =
-  | { ok: true; key: PricedKey; method: "source_provider" | "model_prefix" | "unique_model" | "alias_fallback" }
+  | {
+      ok: true;
+      key: PricedKey;
+      method:
+        | "source_provider"
+        | "model_prefix"
+        | "unique_model"
+        | "alias_fallback"
+        | "cursor_local"
+        | "cursor_api_alias";
+    }
   | { ok: false; unknown: UnknownKey };
 
 export type AggregateRow = {
@@ -186,6 +203,8 @@ function parseModelIdHint(rawModelId?: string): { providerHint?: string; modelPa
 }
 
 const SOURCE_PROVIDER_ALIASES: Record<string, string> = {
+  cursor: "cursor",
+  "cursor-acp": "cursor",
   "github-copilot": "openai",
   "copilot-chat": "openai",
   chatgpt: "openai",
@@ -344,7 +363,11 @@ export function resolvePricingKey(source: {
 
   const tryProvider = (
     providerID: string | undefined,
-    method: "source_provider" | "model_prefix" | "alias_fallback",
+    method:
+      | "source_provider"
+      | "model_prefix"
+      | "alias_fallback"
+      | "cursor_api_alias",
     modelIDHint: string = normalizedModel,
   ): PricingResolution | null => {
     if (!providerID) return null;
@@ -352,6 +375,25 @@ export function resolvePricingKey(source: {
     if (!modelID) return null;
     return { ok: true, key: { provider: providerID, model: modelID }, method };
   };
+
+  if (isCursorProviderId(source.providerID) || isCursorModelId(source.modelID)) {
+    const cursorModel = resolveCursorModel(source.modelID);
+    if (cursorModel.kind === "local") {
+      return {
+        ok: true,
+        key: { provider: "cursor", model: cursorModel.model },
+        method: "cursor_local",
+      };
+    }
+    if (cursorModel.kind === "official") {
+      const resolved = tryProvider(
+        cursorModel.providerHint,
+        "cursor_api_alias",
+        cursorModel.modelHint,
+      );
+      if (resolved) return resolved;
+    }
+  }
 
   const fromSourceProvider = tryProvider(sourceProviderHint, "source_provider");
   if (fromSourceProvider) return fromSourceProvider;
@@ -456,31 +498,22 @@ function calculateCostUsd(params: {
   model: string;
   tokens: TokenBuckets;
 }): { ok: true; costUsd: number } | { ok: false } {
-  const cost = lookupCost(params.provider, params.model);
+  const cost =
+    params.provider === "cursor"
+      ? lookupCursorLocalCost(params.model)
+      : lookupCost(params.provider, params.model);
   if (!cost) return { ok: false };
-
-  // models.dev costs are USD per 1M tokens
-  const perToken = (usdPer1M?: number) => (typeof usdPer1M === "number" ? usdPer1M / 1_000_000 : 0);
-  const inRate = perToken(cost.input);
-  const outRate = perToken(cost.output);
-  const cacheReadRate = perToken(cost.cache_read ?? cost.input);
-  const cacheWriteRate = perToken(cost.cache_write ?? cost.input);
-  const reasoningRate = perToken(cost.reasoning ?? cost.output);
-
-  const usd =
-    params.tokens.input * inRate +
-    params.tokens.output * outRate +
-    params.tokens.cache_read * cacheReadRate +
-    params.tokens.cache_write * cacheWriteRate +
-    params.tokens.reasoning * reasoningRate;
-
-  return { ok: true, costUsd: usd };
+  return { ok: true, costUsd: calculateUsdFromTokenBuckets(cost, params.tokens) };
 }
 
 function classifyMissingPricing(params: {
   mappedProvider: string;
   mappedModel: string;
 }): { kind: "unpriced"; reason: string } | { kind: "unknown" } {
+  if (params.mappedProvider === "cursor") {
+    return { kind: "unknown" };
+  }
+
   // Defensive: if provider wasn't in snapshot we should treat this as unknown mapping.
   if (!hasProvider(params.mappedProvider)) {
     return { kind: "unknown" };

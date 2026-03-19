@@ -127,6 +127,69 @@ describe("/quota command behavior", () => {
     expect(injected).not.toContain("Providers detected");
   });
 
+  it("converts provider fetch failures into injected quota errors", async () => {
+    const provider = {
+      id: "cursor",
+      isAvailable: vi.fn().mockResolvedValue(true),
+      fetch: vi.fn().mockRejectedValue(new Error("sqlite busy")),
+    };
+    mocks.getProviders.mockReturnValue([provider]);
+
+    const { QuotaToastPlugin } = await import("../src/plugin.js");
+    const client = createClient("cursor-acp/auto");
+    const hooks = await QuotaToastPlugin({ client } as any);
+
+    await expect(
+      hooks["command.execute.before"]?.({
+        command: "quota",
+        sessionID: "session-fetch-failure",
+      } as any),
+    ).rejects.toThrow(COMMAND_HANDLED_SENTINEL);
+
+    expect(client.session.prompt).toHaveBeenCalledTimes(1);
+    const injected = client.session.prompt.mock.calls[0]?.[0]?.body?.parts?.[0]?.text ?? "";
+    expect(injected).toContain("Cursor: Failed to read quota data");
+    expect(injected).not.toContain("Providers detected");
+  });
+
+  it("reports explicit cursor providers with no local history as no local usage yet", async () => {
+    mocks.loadConfig.mockResolvedValueOnce({
+      ...DEFAULT_CONFIG,
+      enabled: true,
+      enabledProviders: ["cursor"],
+      showOnQuestion: false,
+      showSessionTokens: false,
+      minIntervalMs: 60_000,
+    });
+
+    const provider = {
+      id: "cursor",
+      isAvailable: vi.fn().mockResolvedValue(true),
+      fetch: vi.fn().mockResolvedValue({
+        attempted: false,
+        entries: [],
+        errors: [],
+      }),
+    };
+    mocks.getProviders.mockReturnValue([provider]);
+
+    const { QuotaToastPlugin } = await import("../src/plugin.js");
+    const client = createClient("cursor-acp/auto");
+    const hooks = await QuotaToastPlugin({ client } as any);
+
+    await expect(
+      hooks["command.execute.before"]?.({
+        command: "quota",
+        sessionID: "session-cursor-empty",
+      } as any),
+    ).rejects.toThrow(COMMAND_HANDLED_SENTINEL);
+
+    expect(client.session.prompt).toHaveBeenCalledTimes(1);
+    const injected = client.session.prompt.mock.calls[0]?.[0]?.body?.parts?.[0]?.text ?? "";
+    expect(injected).toContain("Cursor: No local usage yet");
+    expect(injected).not.toContain("Cursor: Not configured");
+  });
+
   it("bypasses stale /quota cache for qwen local request-plan sessions", async () => {
     const provider = {
       id: "qwen-code",
@@ -213,5 +276,46 @@ describe("/quota command behavior", () => {
     expect(provider.fetch).toHaveBeenCalledTimes(2);
     const latest = client.session.prompt.mock.calls[1]?.[0]?.body?.parts?.[0]?.text ?? "";
     expect(latest).toContain("60% left");
+  });
+
+  it("bypasses stale /quota cache for cursor local-usage sessions", async () => {
+    const provider = {
+      id: "cursor",
+      isAvailable: vi.fn().mockResolvedValue(true),
+      fetch: vi
+        .fn()
+        .mockResolvedValueOnce({
+          attempted: true,
+          entries: [{ name: "Cursor API (Pro)", percentRemaining: 95 }],
+          errors: [],
+        })
+        .mockResolvedValueOnce({
+          attempted: true,
+          entries: [{ name: "Cursor API (Pro)", percentRemaining: 90 }],
+          errors: [],
+        }),
+    };
+    mocks.getProviders.mockReturnValue([provider]);
+
+    const { QuotaToastPlugin } = await import("../src/plugin.js");
+    const client = createClient("cursor-acp/auto");
+    const hooks = await QuotaToastPlugin({ client } as any);
+
+    await expect(
+      hooks["command.execute.before"]?.({
+        command: "quota",
+        sessionID: "session-cursor",
+      } as any),
+    ).rejects.toThrow(COMMAND_HANDLED_SENTINEL);
+    await expect(
+      hooks["command.execute.before"]?.({
+        command: "quota",
+        sessionID: "session-cursor",
+      } as any),
+    ).rejects.toThrow(COMMAND_HANDLED_SENTINEL);
+
+    expect(provider.fetch).toHaveBeenCalledTimes(2);
+    const latest = client.session.prompt.mock.calls[1]?.[0]?.body?.parts?.[0]?.text ?? "";
+    expect(latest).toContain("90% left");
   });
 });

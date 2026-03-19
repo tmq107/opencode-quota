@@ -43,6 +43,7 @@ import {
   recordAlibabaCodingPlanCompletion,
   recordQwenCompletion,
 } from "./lib/qwen-local-quota.js";
+import { isCursorModelId } from "./lib/cursor-pricing.js";
 import {
   parseOptionalJsonArgs,
   parseQuotaBetweenArgs,
@@ -187,7 +188,7 @@ const TOKEN_REPORT_COMMANDS: readonly TokenReportCommandSpec[] = [
   {
     id: "tokens_today",
     template: "/tokens_today",
-    description: "Token + official API cost summary for today (calendar day, local timezone).",
+    description: "Token + deterministic cost summary for today (calendar day, local timezone).",
     title: "Tokens used (Today) (/tokens_today)",
     metadataTitle: "Tokens used (Today)",
     kind: "today",
@@ -195,7 +196,7 @@ const TOKEN_REPORT_COMMANDS: readonly TokenReportCommandSpec[] = [
   {
     id: "tokens_daily",
     template: "/tokens_daily",
-    description: "Token + official API cost summary for the last 24 hours (rolling).",
+    description: "Token + deterministic cost summary for the last 24 hours (rolling).",
     title: "Tokens used (Last 24 Hours) (/tokens_daily)",
     metadataTitle: "Tokens used (Last 24 Hours)",
     kind: "rolling",
@@ -204,7 +205,7 @@ const TOKEN_REPORT_COMMANDS: readonly TokenReportCommandSpec[] = [
   {
     id: "tokens_weekly",
     template: "/tokens_weekly",
-    description: "Token + official API cost summary for the last 7 days (rolling).",
+    description: "Token + deterministic cost summary for the last 7 days (rolling).",
     title: "Tokens used (Last 7 Days) (/tokens_weekly)",
     metadataTitle: "Tokens used (Last 7 Days)",
     kind: "rolling",
@@ -213,7 +214,7 @@ const TOKEN_REPORT_COMMANDS: readonly TokenReportCommandSpec[] = [
   {
     id: "tokens_monthly",
     template: "/tokens_monthly",
-    description: "Token + official API cost summary for the last 30 days (rolling).",
+    description: "Token + deterministic cost summary for the last 30 days (rolling).",
     title: "Tokens used (Last 30 Days) (/tokens_monthly)",
     metadataTitle: "Tokens used (Last 30 Days)",
     kind: "rolling",
@@ -222,7 +223,7 @@ const TOKEN_REPORT_COMMANDS: readonly TokenReportCommandSpec[] = [
   {
     id: "tokens_all",
     template: "/tokens_all",
-    description: "Token + official API cost summary for all locally saved OpenCode history.",
+    description: "Token + deterministic cost summary for all locally saved OpenCode history.",
     title: "Tokens used (All Time) (/tokens_all)",
     metadataTitle: "Tokens used (All Time)",
     kind: "all",
@@ -232,7 +233,7 @@ const TOKEN_REPORT_COMMANDS: readonly TokenReportCommandSpec[] = [
   {
     id: "tokens_session",
     template: "/tokens_session",
-    description: "Token + official API cost summary for current session only.",
+    description: "Token + deterministic cost summary for current session only.",
     title: "Tokens used (Current Session) (/tokens_session)",
     metadataTitle: "Tokens used (Current Session)",
     kind: "session",
@@ -240,7 +241,7 @@ const TOKEN_REPORT_COMMANDS: readonly TokenReportCommandSpec[] = [
   {
     id: "tokens_between",
     template: "/tokens_between",
-    description: "Token + cost report between two YYYY-MM-DD dates (local timezone, inclusive).",
+    description: "Token + deterministic cost report between two YYYY-MM-DD dates (local timezone, inclusive).",
     titleForRange: (startYmd: Ymd, endYmd: Ymd) => {
       return `Tokens used (${formatYmd(startYmd)} .. ${formatYmd(endYmd)}) (/tokens_between)`;
     },
@@ -268,7 +269,7 @@ function isTokenReportCommand(cmd: string): cmd is TokenReportCommandId {
 // Plugin Implementation
 // =============================================================================
 
-const LOCAL_REQUEST_PLAN_PROVIDER_IDS = new Set(["qwen-code", "alibaba-coding-plan"]);
+const LIVE_LOCAL_USAGE_PROVIDER_IDS = new Set(["qwen-code", "alibaba-coding-plan", "cursor"]);
 
 type QuotaCommandCacheEntry = {
   body: string;
@@ -396,9 +397,12 @@ export const QuotaToastPlugin: Plugin = async ({ client }) => {
     const style = ctx.config.toastStyle ?? "classic";
     const googleModels = ctx.config.googleModels.join(",");
     const alibabaCodingPlanTier = ctx.config.alibabaCodingPlanTier;
+    const cursorPlan = ctx.config.cursorPlan;
+    const cursorIncludedApiUsd = ctx.config.cursorIncludedApiUsd ?? "";
+    const cursorBillingCycleStartDay = ctx.config.cursorBillingCycleStartDay ?? "";
     const onlyCurrentModel = ctx.config.onlyCurrentModel ? "yes" : "no";
     const currentModel = ctx.config.currentModel ?? "";
-    return `${providerId}|style=${style}|googleModels=${googleModels}|alibabaTier=${alibabaCodingPlanTier}|onlyCurrentModel=${onlyCurrentModel}|currentModel=${currentModel}`;
+    return `${providerId}|style=${style}|googleModels=${googleModels}|alibabaTier=${alibabaCodingPlanTier}|cursorPlan=${cursorPlan}|cursorIncludedApiUsd=${cursorIncludedApiUsd}|cursorBillingCycleStartDay=${cursorBillingCycleStartDay}|onlyCurrentModel=${onlyCurrentModel}|currentModel=${currentModel}`;
   }
 
   async function fetchProviderWithCache(params: {
@@ -408,8 +412,8 @@ export const QuotaToastPlugin: Plugin = async ({ client }) => {
   }): Promise<QuotaProviderResult> {
     const { provider, ctx, ttlMs } = params;
 
-    // Local request-plan providers should update per completion for accurate rolling counters.
-    if (LOCAL_REQUEST_PLAN_PROVIDER_IDS.has(provider.id)) {
+    // Live local-usage providers should update per completion for accurate local reports.
+    if (LIVE_LOCAL_USAGE_PROVIDER_IDS.has(provider.id)) {
       return await provider.fetch(ctx);
     }
 
@@ -454,7 +458,53 @@ export const QuotaToastPlugin: Plugin = async ({ client }) => {
     return promise;
   }
 
-  async function shouldBypassToastCacheForLocalRequestPlan(
+  function makeProviderFetchFailure(provider: QuotaProvider): QuotaProviderResult {
+    return {
+      attempted: true,
+      entries: [],
+      errors: [
+        {
+          label: getQuotaProviderDisplayLabel(provider.id),
+          message: "Failed to read quota data",
+        },
+      ],
+    };
+  }
+
+  async function fetchProviderResults(params: {
+    providers: QuotaProvider[];
+    ctx: QuotaProviderContext;
+    ttlMs: number;
+  }): Promise<QuotaProviderResult[]> {
+    const settled = await Promise.allSettled(
+      params.providers.map((provider) =>
+        fetchProviderWithCache({
+          provider,
+          ctx: params.ctx,
+          ttlMs: params.ttlMs,
+        }),
+      ),
+    );
+
+    return settled.map((result, index) =>
+      result.status === "fulfilled"
+        ? result.value
+        : makeProviderFetchFailure(params.providers[index]!),
+    );
+  }
+
+  function getExplicitNoDataMessage(provider: QuotaProvider): string {
+    if (provider.id === "cursor") {
+      return "No local usage yet";
+    }
+    return "Not configured";
+  }
+
+  function isProviderEnabled(providerId: string): boolean {
+    return config.enabledProviders === "auto" || config.enabledProviders.includes(providerId);
+  }
+
+  async function shouldBypassToastCacheForLiveLocalUsage(
     trigger: string,
     sessionID: string,
   ): Promise<boolean> {
@@ -463,10 +513,7 @@ export const QuotaToastPlugin: Plugin = async ({ client }) => {
     const currentModel = await getCurrentModel(sessionID);
     if (isQwenCodeModelId(currentModel)) {
       const plan = await resolveQwenLocalPlanCached();
-      return (
-        plan.state === "qwen_free" &&
-        (config.enabledProviders === "auto" || config.enabledProviders.includes("qwen-code"))
-      );
+      return plan.state === "qwen_free" && isProviderEnabled("qwen-code");
     }
 
     if (isAlibabaModelId(currentModel)) {
@@ -474,11 +521,11 @@ export const QuotaToastPlugin: Plugin = async ({ client }) => {
         maxAgeMs: DEFAULT_ALIBABA_AUTH_CACHE_MAX_AGE_MS,
         fallbackTier: config.alibabaCodingPlanTier,
       });
-      return (
-        plan.state === "configured" &&
-        (config.enabledProviders === "auto" ||
-          config.enabledProviders.includes("alibaba-coding-plan"))
-      );
+      return plan.state === "configured" && isProviderEnabled("alibaba-coding-plan");
+    }
+
+    if (isCursorModelId(currentModel)) {
+      return isProviderEnabled("cursor");
     }
 
     return false;
@@ -486,7 +533,7 @@ export const QuotaToastPlugin: Plugin = async ({ client }) => {
 
   async function shouldBypassQuotaCommandCache(sessionID?: string): Promise<boolean> {
     if (config.debug || !sessionID) return config.debug;
-    return await shouldBypassToastCacheForLocalRequestPlan("question", sessionID);
+    return await shouldBypassToastCacheForLiveLocalUsage("question", sessionID);
   }
 
   async function refreshConfig(): Promise<void> {
@@ -554,6 +601,9 @@ export const QuotaToastPlugin: Plugin = async ({ client }) => {
             enabledProviders: config.enabledProviders,
             minIntervalMs: config.minIntervalMs,
             googleModels: config.googleModels,
+            cursorPlan: config.cursorPlan,
+            cursorIncludedApiUsd: config.cursorIncludedApiUsd,
+            cursorBillingCycleStartDay: config.cursorBillingCycleStartDay,
             showOnIdle: config.showOnIdle,
             showOnQuestion: config.showOnQuestion,
             showOnCompact: config.showOnCompact,
@@ -689,6 +739,9 @@ export const QuotaToastPlugin: Plugin = async ({ client }) => {
       config: {
         googleModels: config.googleModels,
         alibabaCodingPlanTier: config.alibabaCodingPlanTier,
+        cursorPlan: config.cursorPlan,
+        cursorIncludedApiUsd: config.cursorIncludedApiUsd,
+        cursorBillingCycleStartDay: config.cursorBillingCycleStartDay,
         toastStyle: config.toastStyle,
         onlyCurrentModel: config.onlyCurrentModel,
         currentModel,
@@ -720,15 +773,11 @@ export const QuotaToastPlugin: Plugin = async ({ client }) => {
         : null;
     }
 
-    const results = await Promise.all(
-      active.map((p) =>
-        fetchProviderWithCache({
-          provider: p,
-          ctx,
-          ttlMs: config.minIntervalMs,
-        }),
-      ),
-    );
+    const results = await fetchProviderResults({
+      providers: active,
+      ctx,
+      ttlMs: config.minIntervalMs,
+    });
 
     const entries: QuotaToastEntry[] = results.flatMap((r) => r.entries);
     const errors: QuotaToastError[] = results.flatMap((r) => r.errors);
@@ -746,7 +795,7 @@ export const QuotaToastPlugin: Plugin = async ({ client }) => {
         if (!result.attempted && result.entries.length === 0 && result.errors.length === 0) {
           errors.push({
             label: getQuotaProviderDisplayLabel(provider.id),
-            message: "Not configured",
+            message: getExplicitNoDataMessage(provider),
           });
           hasExplicitProviderIssues = true;
         }
@@ -872,7 +921,7 @@ export const QuotaToastPlugin: Plugin = async ({ client }) => {
 
     const bypassMessageCache = config.debug
       ? true
-      : await shouldBypassToastCacheForLocalRequestPlan(trigger, sessionID);
+      : await shouldBypassToastCacheForLiveLocalUsage(trigger, sessionID);
 
     const message = bypassMessageCache
       ? await fetchQuotaMessage(trigger, sessionID)
@@ -933,6 +982,9 @@ export const QuotaToastPlugin: Plugin = async ({ client }) => {
       config: {
         googleModels: config.googleModels,
         alibabaCodingPlanTier: config.alibabaCodingPlanTier,
+        cursorPlan: config.cursorPlan,
+        cursorIncludedApiUsd: config.cursorIncludedApiUsd,
+        cursorBillingCycleStartDay: config.cursorBillingCycleStartDay,
         // Always format /quota in grouped mode for a more dashboard-like look.
         toastStyle: "grouped" as const,
         onlyCurrentModel: config.onlyCurrentModel,
@@ -944,17 +996,26 @@ export const QuotaToastPlugin: Plugin = async ({ client }) => {
     const active = avail.filter((x) => x.ok).map((x) => x.p);
     if (active.length === 0) return null;
 
-    const results = await Promise.all(
-      active.map((p) =>
-        fetchProviderWithCache({
-          provider: p,
-          ctx,
-          ttlMs: config.minIntervalMs,
-        }),
-      ),
-    );
+    const results = await fetchProviderResults({
+      providers: active,
+      ctx,
+      ttlMs: config.minIntervalMs,
+    });
     const entries = results.flatMap((r) => r.entries) as any[];
     const errors = results.flatMap((r) => r.errors);
+
+    if (!isAutoMode) {
+      for (let i = 0; i < active.length; i++) {
+        const provider = active[i];
+        const result = results[i];
+        if (!result.attempted && result.entries.length === 0 && result.errors.length === 0) {
+          errors.push({
+            label: getQuotaProviderDisplayLabel(provider.id),
+            message: getExplicitNoDataMessage(provider),
+          });
+        }
+      }
+    }
 
     // Fetch session tokens if enabled and sessionID is available
     let sessionTokens: SessionTokensData | undefined;
@@ -1029,11 +1090,15 @@ export const QuotaToastPlugin: Plugin = async ({ client }) => {
       providers.map(async (p) => {
         let ok = false;
         try {
-          ok = await p.isAvailable({
+            ok = await p.isAvailable({
             client: typedClient,
             config: {
               googleModels: config.googleModels,
               alibabaCodingPlanTier: config.alibabaCodingPlanTier,
+              cursorPlan: config.cursorPlan,
+              cursorIncludedApiUsd: config.cursorIncludedApiUsd,
+              cursorBillingCycleStartDay: config.cursorBillingCycleStartDay,
+              currentModel,
             },
           });
         } catch {
@@ -1061,6 +1126,9 @@ export const QuotaToastPlugin: Plugin = async ({ client }) => {
       configPaths: configMeta.paths,
       enabledProviders: config.enabledProviders,
       alibabaCodingPlanTier: config.alibabaCodingPlanTier,
+      cursorPlan: config.cursorPlan,
+      cursorIncludedApiUsd: config.cursorIncludedApiUsd,
+      cursorBillingCycleStartDay: config.cursorBillingCycleStartDay,
       onlyCurrentModel: config.onlyCurrentModel,
       currentModel,
       sessionModelLookup,
@@ -1159,10 +1227,13 @@ export const QuotaToastPlugin: Plugin = async ({ client }) => {
               const allProvs = getProviders();
               const ctx = {
                 client: typedClient,
-                  config: {
-                    googleModels: config.googleModels,
-                    alibabaCodingPlanTier: config.alibabaCodingPlanTier,
-                  },
+                config: {
+                  googleModels: config.googleModels,
+                  alibabaCodingPlanTier: config.alibabaCodingPlanTier,
+                  cursorPlan: config.cursorPlan,
+                  cursorIncludedApiUsd: config.cursorIncludedApiUsd,
+                  cursorBillingCycleStartDay: config.cursorBillingCycleStartDay,
+                },
               };
               const avail = await Promise.all(
                 allProvs.map(async (p) => {
@@ -1365,25 +1436,27 @@ export const QuotaToastPlugin: Plugin = async ({ client }) => {
 
       if (!config.enabled) return;
 
-      if (isSuccessfulQuestionExecution(output)) {
-            const model = await getCurrentModel(input.sessionID);
-            try {
-              if (isQwenCodeModelId(model)) {
-                const plan = await resolveQwenLocalPlanCached();
-                if (plan.state === "qwen_free") {
-                  await recordQwenCompletion();
-                  clearQuotaCommandCache();
-                }
-              } else if (isAlibabaModelId(model)) {
-                const plan = await resolveAlibabaCodingPlanAuthCached({
+          if (isSuccessfulQuestionExecution(output)) {
+        const model = await getCurrentModel(input.sessionID);
+        try {
+          if (isQwenCodeModelId(model)) {
+            const plan = await resolveQwenLocalPlanCached();
+            if (plan.state === "qwen_free") {
+              await recordQwenCompletion();
+              clearQuotaCommandCache();
+            }
+          } else if (isAlibabaModelId(model)) {
+            const plan = await resolveAlibabaCodingPlanAuthCached({
               maxAgeMs: DEFAULT_ALIBABA_AUTH_CACHE_MAX_AGE_MS,
               fallbackTier: config.alibabaCodingPlanTier,
-                });
-                if (plan.state === "configured") {
-                  await recordAlibabaCodingPlanCompletion();
-                  clearQuotaCommandCache();
-                }
-              }
+            });
+            if (plan.state === "configured") {
+              await recordAlibabaCodingPlanCompletion();
+              clearQuotaCommandCache();
+            }
+          } else if (isCursorModelId(model)) {
+            clearQuotaCommandCache();
+          }
         } catch (err) {
           await log("Failed to record local request-plan quota completion", {
             error: err instanceof Error ? err.message : String(err),

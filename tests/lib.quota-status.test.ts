@@ -116,6 +116,46 @@ vi.mock("../src/lib/alibaba-auth.js", () => ({
   resolveAlibabaCodingPlanAuth: () => ({ state: "none" }),
 }));
 
+vi.mock("../src/lib/cursor-detection.js", () => ({
+  inspectCursorAuthPresence: vi.fn(async () => ({
+    state: "present",
+    selectedPath: "/tmp/cursor/cli-config.json",
+    presentPaths: ["/tmp/cursor/cli-config.json"],
+    candidatePaths: ["/tmp/cursor/cli-config.json", "/tmp/cursor/auth.json"],
+  })),
+  inspectCursorOpenCodeIntegration: vi.fn(async () => ({
+    pluginEnabled: true,
+    providerConfigured: true,
+    matchedPaths: ["/tmp/opencode.json"],
+    checkedPaths: ["/tmp/opencode.json"],
+  })),
+}));
+
+vi.mock("../src/lib/cursor-usage.js", () => ({
+  getCurrentCursorUsageSummary: vi.fn(async () => ({
+    window: {
+      source: "calendar_month",
+      resetTimeIso: "2026-04-01T00:00:00.000Z",
+    },
+    api: {
+      costUsd: 3.5,
+      tokens: { input: 0, output: 0, reasoning: 0, cache_read: 0, cache_write: 0 },
+      messageCount: 2,
+    },
+    autoComposer: {
+      costUsd: 1.25,
+      tokens: { input: 0, output: 0, reasoning: 0, cache_read: 0, cache_write: 0 },
+      messageCount: 1,
+    },
+    total: {
+      costUsd: 4.75,
+      tokens: { input: 0, output: 0, reasoning: 0, cache_read: 0, cache_write: 0 },
+      messageCount: 3,
+    },
+    unknownModels: [],
+  })),
+}));
+
 vi.mock("../src/lib/modelsdev-pricing.js", () => ({
   getPricingSnapshotHealth: () => ({
     ageMs: 0,
@@ -140,7 +180,7 @@ vi.mock("../src/lib/modelsdev-pricing.js", () => ({
 }));
 
 vi.mock("../src/providers/registry.js", () => ({
-  getProviders: () => [{ id: "copilot" }],
+  getProviders: () => [{ id: "copilot" }, { id: "cursor" }],
 }));
 
 vi.mock("../src/lib/version.js", () => ({
@@ -179,6 +219,7 @@ describe("buildQuotaStatusReport", () => {
       configPaths: [],
       enabledProviders: ["copilot"],
       alibabaCodingPlanTier: "lite",
+      cursorPlan: "pro",
       onlyCurrentModel: false,
       providerAvailability: [
         {
@@ -207,6 +248,15 @@ describe("buildQuotaStatusReport", () => {
     expect(report).toContain("- alibaba auth configured: false");
     expect(report).toContain("- alibaba coding plan fallback tier: lite");
     expect(report).toContain("- alibaba_coding_plan: (none)");
+    expect(report).toContain("cursor:");
+    expect(report).toContain("- plan: Pro");
+    expect(report).toContain("- included_api_usd: $20.00");
+    expect(report).toContain("- auth_state: present");
+    expect(report).toContain("- plugin_enabled: true");
+    expect(report).toContain("- provider_configured: true");
+    expect(report).toContain("- cycle_source: calendar_month");
+    expect(report).toContain("- api_usage: $3.50 across 2 messages");
+    expect(report).toContain("- total_cursor_usage: $4.75 across 3 messages");
     expect(report).toContain("copilot_quota_auth:");
     expect(report).toContain("- billing_mode: organization_usage");
     expect(report).toContain("- billing_scope: organization");
@@ -267,6 +317,7 @@ describe("buildQuotaStatusReport", () => {
       configPaths: [],
       enabledProviders: ["copilot"],
       alibabaCodingPlanTier: "lite",
+      cursorPlan: "none",
       onlyCurrentModel: false,
       providerAvailability: [
         {

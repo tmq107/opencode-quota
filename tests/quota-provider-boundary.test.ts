@@ -9,6 +9,7 @@ describe("quota provider boundary", () => {
     expect(quotaProviders).toEqual([
       "copilot",
       "openai",
+      "cursor",
       "qwen-code",
       "alibaba-coding-plan",
       "firmware",
@@ -25,4 +26,3 @@ describe("quota provider boundary", () => {
     expect(notInQuotaRegistry.length).toBeGreaterThan(0);
   });
 });
-

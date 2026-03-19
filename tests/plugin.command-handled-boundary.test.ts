@@ -96,11 +96,10 @@ describe("plugin command handled boundary", () => {
     mocks.getProviders.mockReturnValue([
       {
         id: "boom-provider",
-        isAvailable: vi.fn().mockResolvedValue(true),
-        fetch: vi.fn().mockRejectedValue(new Error("boom")),
+        isAvailable: vi.fn().mockRejectedValue(new Error("boom")),
+        fetch: vi.fn(),
       },
     ]);
-
     const { QuotaToastPlugin } = await import("../src/plugin.js");
     const hooks = await QuotaToastPlugin({ client: createClient() } as any);
 

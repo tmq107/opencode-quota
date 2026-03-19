@@ -40,7 +40,14 @@ import {
   getOpenCodeDbStats,
 } from "./opencode-storage.js";
 import { aggregateUsage } from "./quota-stats.js";
-import { renderCommandHeading } from "./format-utils.js";
+import { fmtUsdAmount, renderCommandHeading } from "./format-utils.js";
+import { inspectCursorAuthPresence, inspectCursorOpenCodeIntegration } from "./cursor-detection.js";
+import { getCurrentCursorUsageSummary } from "./cursor-usage.js";
+import {
+  getCursorPlanDisplayName,
+  getEffectiveCursorIncludedApiUsd,
+} from "./cursor-pricing.js";
+import type { CursorQuotaPlan } from "./types.js";
 
 /** Session token fetch error info for status report */
 export interface SessionTokenError {
@@ -167,6 +174,14 @@ function supportedProviderPricingRow(params: {
     };
   }
 
+  if (id === "cursor") {
+    return {
+      id,
+      pricing: "partial",
+      notes: "API-pool models map to official pricing; Auto/Composer use bundled static Cursor rates",
+    };
+  }
+
   // Providers that correspond directly to models.dev providers.
   if (params.snapshotProviders.includes(id)) {
     return { id, pricing: "yes", notes: "models.dev snapshot provider" };
@@ -219,6 +234,9 @@ export async function buildQuotaStatusReport(params: {
   configPaths: string[];
   enabledProviders: string[] | "auto";
   alibabaCodingPlanTier: "lite" | "pro";
+  cursorPlan: CursorQuotaPlan;
+  cursorIncludedApiUsd?: number;
+  cursorBillingCycleStartDay?: number;
   onlyCurrentModel: boolean;
   currentModel?: string;
   /** Whether a session was available for model lookup */
@@ -314,6 +332,52 @@ export async function buildQuotaStatusReport(params: {
   lines.push(
     `- alibaba_coding_plan: ${alibabaCodingPlanAuth.state === "configured" ? alibabaCodingPlanAuth.tier : alibabaCodingPlanAuth.state === "invalid" ? "invalid" : "(none)"}`,
   );
+
+  const cursorPlanLabel = getCursorPlanDisplayName(params.cursorPlan);
+  const cursorIncludedApiUsd = getEffectiveCursorIncludedApiUsd({
+    plan: params.cursorPlan,
+    overrideUsd: params.cursorIncludedApiUsd,
+  });
+  const cursorAuth = await inspectCursorAuthPresence();
+  const cursorIntegration = await inspectCursorOpenCodeIntegration();
+  lines.push("");
+  lines.push("cursor:");
+  lines.push(`- plan: ${cursorPlanLabel ?? "none"}`);
+  lines.push(
+    `- included_api_usd: ${typeof cursorIncludedApiUsd === "number" ? fmtUsdAmount(cursorIncludedApiUsd) : "(none)"}`,
+  );
+  lines.push(
+    `- billing_cycle_start_day: ${typeof params.cursorBillingCycleStartDay === "number" ? params.cursorBillingCycleStartDay : "(calendar month)"}`,
+  );
+  lines.push(`- auth_state: ${cursorAuth.state}`);
+  lines.push(`- auth_selected_path: ${cursorAuth.selectedPath ?? "(none)"}`);
+  lines.push(`- auth_present_paths: ${joinOrNone(cursorAuth.presentPaths)}`);
+  lines.push(`- auth_candidate_paths: ${joinOrNone(cursorAuth.candidatePaths)}`);
+  if (cursorAuth.error) {
+    lines.push(`- auth_error: ${cursorAuth.error}`);
+  }
+  lines.push(`- plugin_enabled: ${cursorIntegration.pluginEnabled ? "true" : "false"}`);
+  lines.push(`- provider_configured: ${cursorIntegration.providerConfigured ? "true" : "false"}`);
+  lines.push(`- config_matches: ${joinOrNone(cursorIntegration.matchedPaths)}`);
+  lines.push(`- config_checked_paths: ${joinOrNone(cursorIntegration.checkedPaths)}`);
+  try {
+    const cursorUsage = await getCurrentCursorUsageSummary({
+      billingCycleStartDay: params.cursorBillingCycleStartDay,
+    });
+    lines.push(`- cycle_source: ${cursorUsage.window.source}`);
+    lines.push(`- cycle_reset_at: ${cursorUsage.window.resetTimeIso}`);
+    lines.push(`- api_usage: ${fmtUsdAmount(cursorUsage.api.costUsd)} across ${fmtInt(cursorUsage.api.messageCount)} messages`);
+    lines.push(
+      `- auto_composer_usage: ${fmtUsdAmount(cursorUsage.autoComposer.costUsd)} across ${fmtInt(cursorUsage.autoComposer.messageCount)} messages`,
+    );
+    lines.push(
+      `- total_cursor_usage: ${fmtUsdAmount(cursorUsage.total.costUsd)} across ${fmtInt(cursorUsage.total.messageCount)} messages`,
+    );
+    lines.push(`- unknown_cursor_models: ${fmtInt(cursorUsage.unknownModels.length)}`);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    lines.push(`- usage_error: ${msg}`);
+  }
 
   const qwenLocalQuotaPath = getQwenLocalQuotaPath();
   const qwenLocalQuotaExists = await pathExists(qwenLocalQuotaPath);

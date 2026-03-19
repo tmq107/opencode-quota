@@ -1,3 +1,5 @@
+import type { CursorQuotaPlan } from "./types.js";
+
 /**
  * Normalized quota output model.
  *
@@ -94,6 +96,9 @@ export interface QuotaProviderContext {
   config: {
     googleModels: string[];
     alibabaCodingPlanTier: "lite" | "pro";
+    cursorPlan: CursorQuotaPlan;
+    cursorIncludedApiUsd?: number;
+    cursorBillingCycleStartDay?: number;
     toastStyle?: "classic" | "grouped";
     onlyCurrentModel?: boolean;
     currentModel?: string;

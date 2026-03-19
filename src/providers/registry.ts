@@ -7,6 +7,7 @@
 import type { QuotaProvider } from "../lib/entries.js";
 import { copilotProvider } from "./copilot.js";
 import { openaiProvider } from "./openai.js";
+import { cursorProvider } from "./cursor.js";
 import { googleAntigravityProvider } from "./google-antigravity.js";
 import { firmwareProvider } from "./firmware.js";
 import { chutesProvider } from "./chutes.js";
@@ -19,6 +20,7 @@ export function getProviders(): QuotaProvider[] {
   return [
     copilotProvider,
     openaiProvider,
+    cursorProvider,
     qwenCodeProvider,
     alibabaCodingPlanProvider,
     firmwareProvider,
