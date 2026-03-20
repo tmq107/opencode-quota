@@ -13,16 +13,16 @@ Quota and `/tokens_*` output are computed from local OpenCode session history.
 
 <table>
   <tr>
+    <td width="50%" align="center">Quota toast and list of commands</td>
+    <td width="50%" align="center">`/tokens_daily` output</td>
+  </tr>
+  <tr>
     <td width="50%">
       <img src="https://github.com/slkiser/opencode-quota/blob/main/toast.png" alt="Image of quota toasts" />
     </td>
     <td width="50%">
       <img src="https://github.com/slkiser/opencode-quota/blob/main/quota.png" alt="Image of /quota and /tokens_daily outputs" />
     </td>
-  </tr>
-  <tr>
-    <td align="center">Quota toasts</td>
-    <td align="center">`/quota` and `/tokens_daily` output</td>
   </tr>
 </table>
 
