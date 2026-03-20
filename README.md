@@ -78,15 +78,15 @@ That is enough for most installs. Providers are auto-detected from your existing
 
 | Provider | Auto setup | How it works |
 | --- | --- | --- |
-| **GitHub Copilot** | Usually | OpenCode auth; PAT only for managed billing. [**Notes**](#github-copilot-notes) |
-| **OpenAI** | Yes | OpenCode auth. [**Notes**](#openai-notes) |
-| **Cursor** | Needs [quick setup](#cursor-quick-setup) | Companion auth plugin + `provider.cursor`. [**Notes**](#cursor-notes) |
-| **Qwen Code** | Needs [quick setup](#qwen-code-quick-setup) | Companion auth plugin. [**Notes**](#qwen-code-notes) |
-| **Alibaba Coding Plan** | Yes | Native OpenCode auth with local request estimation. [**Notes**](#alibaba-coding-plan-notes) |
-| **Firmware AI** | Usually | OpenCode config; API key optional. [**Notes**](#firmware-ai-notes) |
-| **Chutes AI** | Usually | OpenCode config; API key optional. [**Notes**](#chutes-ai-notes) |
-| **Google Antigravity** | Needs [quick setup](#google-antigravity-quick-setup) | Companion auth plugin. [**Notes**](#google-antigravity-notes) |
-| **Z.ai** | Yes | OpenCode auth. [**Notes**](#zai-notes) |
+| **GitHub Copilot** | Usually | OpenCode auth; PAT only for managed billing. |
+| **OpenAI** | Yes | OpenCode auth. |
+| **Cursor** | Needs [quick setup](#cursor-quick-setup) | Companion auth plugin + `provider.cursor`. |
+| **Qwen Code** | Needs [quick setup](#qwen-code-quick-setup) | Companion auth plugin. |
+| **Alibaba Coding Plan** | Yes | Native OpenCode auth with local request estimation. |
+| **Firmware AI** | Usually | OpenCode config; API key optional. |
+| **Chutes AI** | Usually | OpenCode config; API key optional. |
+| **Google Antigravity** | Needs [quick setup](#google-antigravity-quick-setup) | Companion auth plugin. |
+| **Z.ai** | Yes | OpenCode auth. |
 
 <a id="cursor-quick-setup"></a>
 <details>
@@ -204,14 +204,6 @@ Example `copilot-quota-token.json`:
   "username": "optional-user-filter"
 }
 ```
-
-</details>
-
-<a id="openai-notes"></a>
-<details>
-<summary><strong>OpenAI</strong></summary>
-
-No extra setup is required if OpenCode already has OpenAI or ChatGPT auth configured.
 
 </details>
 
@@ -336,14 +328,6 @@ If detection looks wrong, `/quota_status` prints the candidate paths checked for
 
 </details>
 
-<a id="zai-notes"></a>
-<details>
-<summary><strong>Z.ai</strong></summary>
-
-No extra setup is required if OpenCode already has Z.ai configured.
-
-</details>
-
 ## Configuration Reference
 
 All plugin settings live under `experimental.quotaToast`.
@@ -403,37 +387,7 @@ If something is missing or looks wrong:
 
 If `opencode.db` is missing, start OpenCode once and let its local migration complete.
 
-## Development
-
-```sh
-npm install
-npm run typecheck
-npm test
-npm run build
-```
-
-Maintainer workflow for tracked upstream companion plugins:
-
-```sh
-npm run upstream:check
-npm run upstream:prepare-review
-npm run upstream:sync
-```
-
-- `npm run upstream:check` compares the committed references in `references/upstream-plugins/lock.json` with the latest npm releases for `opencode-qwencode-auth`, `opencode-antigravity-auth`, and `opencode-cursor-oauth`.
-- `.github/workflows/upstream-plugin-update-check.yml` runs that check daily and keeps at most one open `[check] <plugin> had update` issue per plugin. If a newer npm release arrives before you act, that same issue is updated and gets a comment instead of piling up more issues.
-- `npm run upstream:prepare-review` is the normal maintainer command. It syncs the latest published package copies, runs `npm test`, runs `npm run typecheck`, and prints a ready-to-paste prompt for another agent with changed relative paths and diff previews.
-- `npm run upstream:sync` downloads the latest published package contents into `references/upstream-plugins/<plugin>/` and rewrites `references/upstream-plugins/lock.json`.
-- Known embedded upstream credentials are redacted deterministically during sync before the reference copies are committed. Update issues still come from `references/upstream-plugins/lock.json` version comparisons.
-- Syncing does not close the GitHub issue. The issue stays open until you finish review/fix/release work and close it manually.
-- These reference copies are committed for maintainer review only. They are not published in this package because `package.json` ships only `dist`, `README.md`, and `LICENSE`.
-
-If you maintain this repo through an agentic `/command` workflow, keep your normal-language maintainer prompt rules in local `AGENTS.md`. The current local prompt patterns are:
-
-- `please help me add feature: <short description>`
-- `please handle bug issue #<number>`
-- `please handle feature request issue #<number>`
-- `please sync our plugin updates`
+## Contribution
 
 See [CONTRIBUTING.md](./CONTRIBUTING.md) for contribution workflow and repository policy.
 
