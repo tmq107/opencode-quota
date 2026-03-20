@@ -11,15 +11,15 @@
 
 <table>
   <tr>
-    <td width="50%" align="center">Quota toast and list of commands</td>
-    <td width="50%" align="center"><code>/tokens_daily</code> output</td>
+    <td width="50%" align="center">Example of toast</td>
+    <td width="50%" align="center">Example of <code>/tokens_weekly</code></td>
   </tr>
   <tr>
     <td width="50%">
-      <img src="https://github.com/slkiser/opencode-quota/blob/main/toast.png" alt="Image of quota toasts" />
+      <img src="https://github.com/slkiser/opencode-quota/blob/main/toast.png" alt="Image of opencode-quota toast" />
     </td>
     <td width="50%">
-      <img src="https://github.com/slkiser/opencode-quota/blob/main/quota.png" alt="Image of /quota and /tokens_daily outputs" />
+      <img src="https://github.com/slkiser/opencode-quota/blob/main/tokens.png" alt="Image of opencode-quota /tokens_weekly output" />
     </td>
   </tr>
 </table>
@@ -78,21 +78,21 @@ That is enough for most installs. Providers are auto-detected from your existing
 
 | Provider | Auto setup | How it works |
 | --- | --- | --- |
-| GitHub Copilot | Usually | OpenCode auth; PAT only for managed billing. [Notes](#github-copilot-notes) |
-| OpenAI | Yes | OpenCode auth. [Notes](#openai-notes) |
-| Cursor | Needs quick setup. [Quick setup](#cursor-quick-setup) | OAuth companion plugin + `provider.cursor`. [Notes](#cursor-notes) |
-| Qwen Code | Needs quick setup. [Quick setup](#qwen-code-quick-setup) | Companion auth plugin. [Notes](#qwen-code-notes) |
-| Alibaba Coding Plan | Yes | Native OpenCode auth with local request estimation. [Notes](#alibaba-coding-plan-notes) |
-| Firmware AI | Usually | OpenCode config; API key optional. [Notes](#firmware-ai-notes) |
-| Chutes AI | Usually | OpenCode config; API key optional. [Notes](#chutes-ai-notes) |
-| Google Antigravity | Needs quick setup. [Quick setup](#google-antigravity-quick-setup) | Companion auth plugin. [Notes](#google-antigravity-notes) |
-| Z.ai | Yes | OpenCode auth. [Notes](#zai-notes) |
+| **GitHub Copilot** | Usually | OpenCode auth; PAT only for managed billing. [**Notes**](#github-copilot-notes) |
+| **OpenAI** | Yes | OpenCode auth. [**Notes**](#openai-notes) |
+| **Cursor** | Needs [quick setup](#cursor-quick-setup) | Companion auth plugin + `provider.cursor`. [**Notes**](#cursor-notes) |
+| **Qwen Code** | Needs [quick setup](#qwen-code-quick-setup) | Companion auth plugin. [**Notes**](#qwen-code-notes) |
+| **Alibaba Coding Plan** | Yes | Native OpenCode auth with local request estimation. [**Notes**](#alibaba-coding-plan-notes) |
+| **Firmware AI** | Usually | OpenCode config; API key optional. [**Notes**](#firmware-ai-notes) |
+| **Chutes AI** | Usually | OpenCode config; API key optional. [**Notes**](#chutes-ai-notes) |
+| **Google Antigravity** | Needs [quick setup](#google-antigravity-quick-setup) | Companion auth plugin. [**Notes**](#google-antigravity-notes) |
+| **Z.ai** | Yes | OpenCode auth. [**Notes**](#zai-notes) |
 
 <a id="cursor-quick-setup"></a>
 <details>
 <summary><strong>Quick setup: Cursor</strong></summary>
 
-Cursor quota support requires the [`opencode-cursor-oauth` companion auth plugin](https://github.com/ephraimduncan/opencode-cursor):
+Cursor quota support requires the `opencode-cursor-oauth` [plugin](https://github.com/ephraimduncan/opencode-cursor):
 
 ```jsonc
 {
@@ -126,7 +126,7 @@ For behavior details and troubleshooting, see [Cursor notes](#cursor-notes).
 <details>
 <summary><strong>Quick setup: Google Antigravity</strong></summary>
 
-Google quota support requires the `opencode-antigravity-auth` [companion auth plugin](https://github.com/NoeFabris/opencode-antigravity-auth):
+Google quota support requires the `opencode-antigravity-auth` [plugin](https://github.com/NoeFabris/opencode-antigravity-auth):
 
 ```jsonc
 {
@@ -142,7 +142,7 @@ For behavior details and troubleshooting, see [Google Antigravity notes](#google
 <details>
 <summary><strong>Quick setup: Qwen Code</strong></summary>
 
-Qwen quota support requires the `opencode-qwencode-auth` [companion auth plugin](https://github.com/gustavodiasdev/opencode-qwencode-auth):
+Qwen quota support requires the `opencode-qwencode-auth` [plugin](https://github.com/gustavodiasdev/opencode-qwencode-auth):
 
 ```jsonc
 {
@@ -177,11 +177,15 @@ There is no `/token` command. The reporting commands are the `/tokens_*` family.
 <details>
 <summary><strong>GitHub Copilot</strong></summary>
 
-Personal Copilot quota works automatically when OpenCode is already signed in. When no `copilot-quota-token.json` exists, the plugin reads the OpenCode Copilot OAuth token from `~/.local/share/opencode/auth.json` and queries `GET https://api.github.com/copilot_internal/user` with `Authorization: Bearer <access token>`.
+Personal quota works automatically when OpenCode is already signed in. Without `copilot-quota-token.json`, the plugin reads the OpenCode Copilot OAuth token from `~/.local/share/opencode/auth.json` and calls `GET https://api.github.com/copilot_internal/user`.
 
-For managed billing, create `copilot-quota-token.json` under the OpenCode runtime config directory. You can find the directory with `opencode debug paths`.
+- Managed billing uses `copilot-quota-token.json` in the OpenCode runtime config directory (`opencode debug paths`). `business` requires `organization`; `enterprise` requires `enterprise` and can also filter by `organization` or `username`.
+- `copilot-quota-token.json` takes precedence over OAuth. If the PAT config is invalid, the plugin reports that error and does not silently fall back.
+- Output is labeled `[Copilot] (personal)` or `[Copilot] (business)`, and managed output includes the org or enterprise slug.
+- Enterprise premium usage does not support fine-grained PATs or GitHub App tokens.
+- Check `/quota_status` for `copilot_quota_auth`, `billing_mode`, `billing_scope`, `quota_api`, `effective_source`, and `billing_api_access_likely`.
 
-Organization example:
+Example `copilot-quota-token.json`:
 
 ```json
 {
@@ -190,8 +194,6 @@ Organization example:
   "organization": "your-org-slug"
 }
 ```
-
-Enterprise example:
 
 ```json
 {
@@ -202,22 +204,6 @@ Enterprise example:
   "username": "optional-user-filter"
 }
 ```
-
-Behavior notes:
-
-- Personal output is labeled `[Copilot] (personal)`.
-- Managed organization and enterprise output is labeled `[Copilot] (business)`.
-- Managed output includes the org or enterprise slug in the value line so the billing scope is still visible.
-- If both OpenCode OAuth and `copilot-quota-token.json` exist, the PAT config wins.
-- If no PAT config exists, OpenCode Copilot OAuth is treated as personal quota auth via `/copilot_internal/user`.
-- If the PAT config is invalid, the plugin reports that error and does not silently fall back to OAuth.
-- `business` requires `organization`.
-- Enterprise premium usage does not support fine-grained PATs or GitHub App tokens. Use a supported enterprise token such as a classic PAT.
-
-Useful checks:
-
-- Run `/quota_status` and inspect `copilot_quota_auth`.
-- Look for `billing_mode`, `billing_scope`, `quota_api`, `effective_source`, and `billing_api_access_likely`.
 
 </details>
 
@@ -233,27 +219,15 @@ No extra setup is required if OpenCode already has OpenAI or ChatGPT auth config
 <details>
 <summary><strong>Cursor</strong></summary>
 
-Cursor support targets the OAuth-based [`opencode-cursor`](https://github.com/ephraimduncan/opencode-cursor) plugin. For the fastest setup, use the combined Cursor config from Quick Start, then run `opencode auth login --provider cursor` once.
+See [Cursor quick setup](#cursor-quick-setup) for auth. Quota and token reporting stays local to OpenCode history and local pricing data.
 
-Restart or reload OpenCode, then run `/quota_status`.
+- Detects Cursor usage when the provider is `cursor` or the stored/current model id is `cursor/*`.
+- `/tokens_*` maps Cursor API-pool models to official pricing and uses bundled static pricing for `auto` and `composer*`.
+- `/quota` and toasts estimate the current billing-cycle spend from local history only. Session cookies and team APIs are not required.
+- Remaining percentage appears only when `experimental.quotaToast.cursorPlan` or `experimental.quotaToast.cursorIncludedApiUsd` is set. Billing cycle defaults to the local calendar month unless `experimental.quotaToast.cursorBillingCycleStartDay` is set.
+- Legacy `cursor-acp/*` history remains readable. Unknown future Cursor model ids appear in `/quota_status` under Cursor diagnostics and `unknown_pricing`.
 
-Current behavior:
-
-- Detects Cursor usage from local OpenCode history when the current provider is `cursor` or the stored/current model id is `cursor/*`
-- `/tokens_*` maps Cursor API-pool models into official pricing and uses bundled static rates for `auto` and `composer*`
-- `/quota` and toasts estimate the current billing-cycle spend from local OpenCode history
-- Percentage remaining is shown only when you configure `cursorPlan` or `cursorIncludedApiUsd`
-- Billing cycle defaults to the local calendar month unless you set `cursorBillingCycleStartDay`
-
-Notes:
-
-- If you only want usage tracking and do not care about Cursor budget percentage remaining, you can omit the `experimental.quotaToast` block or set `"cursorPlan": "none"`
-- Cursor OAuth and proxy traffic are used by OpenCode itself, but this plugin still computes quota and token output only from local `opencode.db`, local `auth.json`, and the bundled/runtime pricing snapshot
-- Session cookies and Cursor team APIs are not required for this local reporting path
-- Legacy `cursor-acp/*` history remains readable for older installs, but new installs should use the OAuth plugin workflow
-- Unknown future Cursor model ids are surfaced in `/quota_status` under Cursor diagnostics and `unknown_pricing`
-
-If you need a custom included API budget, override it directly:
+Example override:
 
 ```jsonc
 {
@@ -272,19 +246,12 @@ If you need a custom included API budget, override it directly:
 <details>
 <summary><strong>Qwen Code</strong></summary>
 
-Qwen support is local-only estimation for the free plan. The plugin does not call an Alibaba quota API.
+See [Qwen Code quick setup](#qwen-code-quick-setup) for auth. Usage is local-only estimation for the free plan; the plugin does not call an Alibaba quota API.
 
-Current behavior:
-
-- Free tier only: 1000 requests per UTC day
-- Free tier only: 60 requests per rolling minute
-- Counters increment on successful question-tool completions while the current model is `qwen-code/*`
-
-State file path:
-
-- `.../opencode/opencode-quota/qwen-local-quota.json`
-
-Run `/quota_status` to verify auth detection, `qwen_local_plan`, and local counter status.
+- Free tier limits: `1000` requests per UTC day and `60` requests per rolling minute.
+- Counters increment on successful question-tool completions while the current model is `qwen-code/*`.
+- State file: `.../opencode/opencode-quota/qwen-local-quota.json`.
+- Check `/quota_status` for auth detection, `qwen_local_plan`, and local counter state.
 
 </details>
 
@@ -292,16 +259,16 @@ Run `/quota_status` to verify auth detection, `qwen_local_plan`, and local count
 <details>
 <summary><strong>Alibaba Coding Plan</strong></summary>
 
-Alibaba Coding Plan uses native OpenCode auth from either `alibaba` or `alibaba-coding-plan` in `auth.json`, instead of the Qwen companion plugin. Quota estimation is request-count based with rolling windows.
+Uses native OpenCode auth from `alibaba` or `alibaba-coding-plan`. Quota is local request-count estimation with rolling windows.
 
-Supported tiers:
+- `lite`: `1200 / 5h`, `9000 / week`, `18000 / month`
+- `pro`: `6000 / 5h`, `45000 / week`, `90000 / month`
+- If auth omits `tier`, the plugin uses `experimental.quotaToast.alibabaCodingPlanTier`, which defaults to `lite`.
+- Counters increment on successful question-tool completions while the current model is `alibaba/*` or `alibaba-cn/*`.
+- State file: `.../opencode/opencode-quota/alibaba-coding-plan-local-quota.json`.
+- `/quota_status` shows auth detection, resolved tier, state-file path, and current 5h/weekly/monthly usage.
 
-- `lite`: 1200 requests / 5 hours, 9000 / week, 18000 / month
-- `pro`: 6000 requests / 5 hours, 45000 / week, 90000 / month
-- If `tier` is missing from auth, the plugin uses `experimental.quotaToast.alibabaCodingPlanTier` and defaults that setting to `lite`
-- Counters increment on successful question-tool completions while the current model is `alibaba/*` or `alibaba-cn/*`
-
-If Alibaba Coding Plan auth does not include a `tier`, you can set the fallback tier here:
+Example fallback tier:
 
 ```jsonc
 {
@@ -313,19 +280,15 @@ If Alibaba Coding Plan auth does not include a `tier`, you can set the fallback 
 }
 ```
 
-State file path:
-
-- `.../opencode/opencode-quota/alibaba-coding-plan-local-quota.json`
-
-`/quota_status` shows whether Alibaba auth is configured, the resolved Alibaba coding-plan tier, the Alibaba state-file path, and the current 5h/weekly/monthly usage when this plan is active.
-
 </details>
 
 <a id="firmware-ai-notes"></a>
 <details>
 <summary><strong>Firmware AI</strong></summary>
 
-If OpenCode already has Firmware configured, it usually works automatically. You can also provide an API key:
+If OpenCode already has Firmware configured, it usually works automatically. Optional API key: `provider.firmware.options.apiKey`.
+
+`{env:FIRMWARE_API_KEY}` and literal values are both supported.
 
 ```jsonc
 {
@@ -335,16 +298,9 @@ If OpenCode already has Firmware configured, it usually works automatically. You
         "apiKey": "{env:FIRMWARE_API_KEY}"
       }
     }
-  },
-  "experimental": {
-    "quotaToast": {
-      "enabledProviders": ["firmware"]
-    }
   }
 }
 ```
-
-`{env:VAR_NAME}` and direct keys are both supported.
 
 </details>
 
@@ -352,7 +308,9 @@ If OpenCode already has Firmware configured, it usually works automatically. You
 <details>
 <summary><strong>Chutes AI</strong></summary>
 
-If OpenCode already has Chutes configured, it usually works automatically. You can also provide an API key:
+If OpenCode already has Chutes configured, it usually works automatically. Optional API key: `provider.chutes.options.apiKey`.
+
+`{env:CHUTES_API_KEY}` and literal values are both supported.
 
 ```jsonc
 {
@@ -361,11 +319,6 @@ If OpenCode already has Chutes configured, it usually works automatically. You c
       "options": {
         "apiKey": "{env:CHUTES_API_KEY}"
       }
-    }
-  },
-  "experimental": {
-    "quotaToast": {
-      "enabledProviders": ["chutes"]
     }
   }
 }
@@ -377,9 +330,9 @@ If OpenCode already has Chutes configured, it usually works automatically. You c
 <details>
 <summary><strong>Google Antigravity</strong></summary>
 
-This provider requires the `opencode-antigravity-auth` plugin. Account credentials are stored under the OpenCode runtime config directory.
+See [Google Antigravity quick setup](#google-antigravity-quick-setup). Credentials live under the OpenCode runtime config directory.
 
-If you are debugging detection, `/quota_status` prints the candidate paths checked for `antigravity-accounts.json`.
+If detection looks wrong, `/quota_status` prints the candidate paths checked for `antigravity-accounts.json`.
 
 </details>
 
@@ -423,29 +376,20 @@ All plugin settings live under `experimental.quotaToast`.
 
 ## Token Pricing Snapshot
 
-`/tokens_*` uses a local `models.dev` pricing snapshot plus bundled static Cursor pricing for Cursor-only pool models.
+`/tokens_*` uses a local `models.dev` pricing snapshot. A bundled snapshot ships for offline use, and Cursor `auto` and `composer*` pricing stays bundled because those ids are not on `models.dev`.
 
-Behavior:
+| `pricingSnapshot.source` | Active pricing behavior |
+| --- | --- |
+| `auto` | Newer runtime snapshot wins; otherwise bundled pricing stays active. |
+| `bundled` | Packaged bundled snapshot stays active. |
+| `runtime` | Runtime snapshot stays active when present; bundled pricing is fallback until one exists. |
 
-- A bundled snapshot ships with the plugin for offline use.
-- `pricingSnapshot.source: "auto"` keeps the current default behavior: newer runtime snapshot wins, otherwise the bundled snapshot stays active.
-- `pricingSnapshot.source: "bundled"` pins the packaged snapshot and ignores the runtime snapshot for active pricing.
-- `pricingSnapshot.source: "runtime"` pins the local runtime snapshot when present and falls back to the bundled snapshot until a runtime snapshot exists.
-- `pricingSnapshot.autoRefresh` controls how many days a local snapshot can age before the plugin refreshes it in the background.
-- Run `/pricing_refresh` to pull a fresh local runtime snapshot from `models.dev` on demand.
-- `/pricing_refresh` updates only the local runtime snapshot under the OpenCode cache directory. It does not rewrite the packaged bundled snapshot shipped in the plugin.
-- When `pricingSnapshot.source` is `"bundled"`, `/pricing_refresh` still refreshes the local runtime cache, but active reports remain pinned to bundled pricing until you switch selection mode.
-- Reports continue to work if refresh fails.
-- Cursor `auto` and `composer*` pricing is bundled in the plugin because those ids are not on `models.dev`.
-- Snapshot selection stays local and deterministic. This does not add custom remote URLs or arbitrary pricing sources.
-
-Maintainer refresh commands:
-
-```sh
-npm run pricing:refresh
-npm run pricing:refresh:if-stale
-npm run build
-```
+- See [Configuration Reference](#configuration-reference) for option defaults.
+- `pricingSnapshot.autoRefresh` controls how many days a runtime snapshot can age before background refresh.
+- `/pricing_refresh` refreshes only the local runtime snapshot under the OpenCode cache directory. It never rewrites the packaged bundled snapshot.
+- If `pricingSnapshot.source` is `bundled`, `/pricing_refresh` still updates the runtime cache, but active pricing stays bundled.
+- Reports keep working if refresh fails.
+- Pricing selection stays local and deterministic. There are no custom URLs or arbitrary pricing sources.
 
 ## Troubleshooting
 
@@ -467,6 +411,29 @@ npm run typecheck
 npm test
 npm run build
 ```
+
+Maintainer workflow for tracked upstream companion plugins:
+
+```sh
+npm run upstream:check
+npm run upstream:prepare-review
+npm run upstream:sync
+```
+
+- `npm run upstream:check` compares the committed references in `references/upstream-plugins/lock.json` with the latest npm releases for `opencode-qwencode-auth`, `opencode-antigravity-auth`, and `opencode-cursor-oauth`.
+- `.github/workflows/upstream-plugin-update-check.yml` runs that check daily and keeps at most one open `[check] <plugin> had update` issue per plugin. If a newer npm release arrives before you act, that same issue is updated and gets a comment instead of piling up more issues.
+- `npm run upstream:prepare-review` is the normal maintainer command. It syncs the latest published package copies, runs `npm test`, runs `npm run typecheck`, and prints a ready-to-paste prompt for another agent with changed relative paths and diff previews.
+- `npm run upstream:sync` downloads the latest published package contents into `references/upstream-plugins/<plugin>/` and rewrites `references/upstream-plugins/lock.json`.
+- Known embedded upstream credentials are redacted deterministically during sync before the reference copies are committed. Update issues still come from `references/upstream-plugins/lock.json` version comparisons.
+- Syncing does not close the GitHub issue. The issue stays open until you finish review/fix/release work and close it manually.
+- These reference copies are committed for maintainer review only. They are not published in this package because `package.json` ships only `dist`, `README.md`, and `LICENSE`.
+
+If you maintain this repo through an agentic `/command` workflow, keep your normal-language maintainer prompt rules in local `AGENTS.md`. The current local prompt patterns are:
+
+- `please help me add feature: <short description>`
+- `please handle bug issue #<number>`
+- `please handle feature request issue #<number>`
+- `please sync our plugin updates`
 
 See [CONTRIBUTING.md](./CONTRIBUTING.md) for contribution workflow and repository policy.
 

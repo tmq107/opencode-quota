@@ -21,7 +21,9 @@ coverage/
 opencode.json
 
 # Local scratch & AI Slop
-references/
+references/*
+!references/upstream-plugins/
+!references/upstream-plugins/**
 .git.backup-*/
 docs/
 AGENTS.md
