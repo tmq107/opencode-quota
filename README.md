@@ -45,9 +45,7 @@ Then:
 That is enough for most installs. Providers are auto-detected from your existing OpenCode setup, and most providers work from your existing OpenCode auth. If a provider needs anything extra, use the setup table below.
 
 <details>
-<summary><strong>Example: Narrow to specific providers</strong></summary>
-
-If you want to narrow the plugin to specific providers, use:
+<summary><strong>Example: Turn off auto-detection and choose providers</strong></summary>
 
 ```jsonc
 {
@@ -63,8 +61,6 @@ If you want to narrow the plugin to specific providers, use:
 
 <details>
 <summary><strong>Example: Grouped toast layout instead of the default classic toast</strong></summary>
-
-If you want grouped toast layout instead of the default classic toast, use:
 
 ```jsonc
 {
@@ -84,19 +80,17 @@ If you want grouped toast layout instead of the default classic toast, use:
 | --- | --- | --- |
 | GitHub Copilot | Usually | OpenCode auth; PAT only for managed billing. [Notes](#github-copilot-notes) |
 | OpenAI | Yes | OpenCode auth. [Notes](#openai-notes) |
-| Cursor | Needs quick setup | OAuth companion plugin + `provider.cursor`. [Quick setup](#cursor-quick-setup) · [Notes](#cursor-notes) |
-| Qwen Code | Needs quick setup | Companion auth plugin. [Quick setup](#qwen-code-quick-setup) · [Notes](#qwen-code-notes) |
+| Cursor | Needs quick setup. [Quick setup](#cursor-quick-setup) | OAuth companion plugin + `provider.cursor`. [Notes](#cursor-notes) |
+| Qwen Code | Needs quick setup. [Quick setup](#qwen-code-quick-setup) | Companion auth plugin. [Notes](#qwen-code-notes) |
 | Alibaba Coding Plan | Yes | Native OpenCode auth with local request estimation. [Notes](#alibaba-coding-plan-notes) |
 | Firmware AI | Usually | OpenCode config; API key optional. [Notes](#firmware-ai-notes) |
 | Chutes AI | Usually | OpenCode config; API key optional. [Notes](#chutes-ai-notes) |
-| Google Antigravity | Needs quick setup | Companion auth plugin. [Quick setup](#google-antigravity-quick-setup) · [Notes](#google-antigravity-notes) |
+| Google Antigravity | Needs quick setup. [Quick setup](#google-antigravity-quick-setup) | Companion auth plugin. [Notes](#google-antigravity-notes) |
 | Z.ai | Yes | OpenCode auth. [Notes](#zai-notes) |
 
 <a id="cursor-quick-setup"></a>
 <details>
 <summary><strong>Quick setup: Cursor</strong></summary>
-
-For behavior details and troubleshooting, see [Cursor notes](#cursor-notes).
 
 Cursor quota support requires the [`opencode-cursor-oauth` companion auth plugin](https://github.com/ephraimduncan/opencode-cursor):
 
@@ -124,13 +118,13 @@ Then authenticate once:
 opencode auth login --provider cursor
 ```
 
+For behavior details and troubleshooting, see [Cursor notes](#cursor-notes).
+
 </details>
 
 <a id="google-antigravity-quick-setup"></a>
 <details>
 <summary><strong>Quick setup: Google Antigravity</strong></summary>
-
-For behavior details and troubleshooting, see [Google Antigravity notes](#google-antigravity-notes).
 
 Google quota support requires the `opencode-antigravity-auth` [companion auth plugin](https://github.com/NoeFabris/opencode-antigravity-auth):
 
@@ -140,13 +134,13 @@ Google quota support requires the `opencode-antigravity-auth` [companion auth pl
 }
 ```
 
+For behavior details and troubleshooting, see [Google Antigravity notes](#google-antigravity-notes).
+
 </details>
 
 <a id="qwen-code-quick-setup"></a>
 <details>
 <summary><strong>Quick setup: Qwen Code</strong></summary>
-
-For behavior details and troubleshooting, see [Qwen Code notes](#qwen-code-notes).
 
 Qwen quota support requires the `opencode-qwencode-auth` [companion auth plugin](https://github.com/gustavodiasdev/opencode-qwencode-auth):
 
@@ -155,6 +149,8 @@ Qwen quota support requires the `opencode-qwencode-auth` [companion auth plugin]
   "plugin": ["opencode-qwencode-auth", "@slkiser/opencode-quota"]
 }
 ```
+
+For behavior details and troubleshooting, see [Qwen Code notes](#qwen-code-notes).
 
 </details>
 
@@ -175,8 +171,6 @@ Qwen quota support requires the `opencode-qwencode-auth` [companion auth plugin]
 There is no `/token` command. The reporting commands are the `/tokens_*` family.
 
 ## Provider-Specific Notes
-
-Jump to: [GitHub Copilot](#github-copilot-notes) · [OpenAI](#openai-notes) · [Cursor](#cursor-notes) · [Qwen Code](#qwen-code-notes) · [Alibaba Coding Plan](#alibaba-coding-plan-notes) · [Firmware AI](#firmware-ai-notes) · [Chutes AI](#chutes-ai-notes) · [Google Antigravity](#google-antigravity-notes) · [Z.ai](#zai-notes)
 
 <a id="github-copilot-notes"></a>
 <details>
