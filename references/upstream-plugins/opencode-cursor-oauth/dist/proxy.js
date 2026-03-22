@@ -786,11 +786,18 @@ function sendExecResult(execMsg, messageCase, value, sendFrame) {
 }
 /** Derive a stable key to associate a bridge with a conversation. */
 function deriveBridgeKey(modelId, messages) {
-    // Stable key from model + first user message text.
-    const firstUserMsg = messages.find((m) => m.role === "user");
-    const firstUserText = firstUserMsg ? textContent(firstUserMsg.content) : "";
+    const normalizedMessages = messages
+        .filter((m) => m.role !== "tool")
+        .map((m) => ({
+        role: m.role,
+        content: textContent(m.content),
+    }))
+        .filter((m) => m.content || m.role === "user" || m.role === "system");
     return createHash("sha256")
-        .update(`${modelId}:${firstUserText.slice(0, 200)}`)
+        .update(JSON.stringify({
+        modelId,
+        messages: normalizedMessages,
+    }))
         .digest("hex")
         .slice(0, 16);
 }

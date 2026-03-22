@@ -25,15 +25,34 @@ const CURSOR_UPSTREAM_INTENTIONALLY_UNKNOWN_MODELS = new Set([
 
 function getCursorUpstreamFallbackModelIds(): string[] {
   const source = readFileSync(CURSOR_UPSTREAM_MODELS_PATH, "utf8");
-  const fallbackBlock = source.match(/const FALLBACK_MODELS = \[(?<body>[\s\S]*?)\];/);
-  const body = fallbackBlock?.groups?.body;
-  if (!body) {
+  const marker = "const FALLBACK_MODELS = [";
+  const start = source.indexOf(marker);
+  if (start === -1) {
     throw new Error("Unable to locate Cursor upstream FALLBACK_MODELS in synced reference");
   }
 
-  return [...body.matchAll(/\{ id: "([^"]+)"/g)].map((match) => match[1]!).sort((a, b) =>
-    a.localeCompare(b),
-  );
+  const bodyStart = source.indexOf("[", start);
+  let depth = 0;
+  let bodyEnd = -1;
+  for (let index = bodyStart; index < source.length; index += 1) {
+    const char = source[index];
+    if (char === "[") depth += 1;
+    if (char === "]") {
+      depth -= 1;
+      if (depth === 0) {
+        bodyEnd = index;
+        break;
+      }
+    }
+  }
+
+  if (bodyStart === -1 || bodyEnd === -1) {
+    throw new Error("Unable to parse Cursor upstream FALLBACK_MODELS in synced reference");
+  }
+
+  return [...source.slice(bodyStart, bodyEnd + 1).matchAll(/\bid\s*:\s*"([^"]+)"/g)]
+    .map((match) => match[1]!)
+    .sort((a, b) => a.localeCompare(b));
 }
 
 describe("resolvePricingKey snapshot coverage", () => {
