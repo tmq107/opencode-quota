@@ -36,7 +36,7 @@ describe("qwen-code provider", () => {
     const { computeQwenQuota, readQwenLocalQuotaState } = await import("../src/lib/qwen-local-quota.js");
 
     (readAuthFileCached as any).mockResolvedValue({
-      "opencode-qwencode-auth": { type: "oauth", access: "token" },
+      "qwen-code": { type: "oauth", access: "token" },
     });
     (readQwenLocalQuotaState as any).mockResolvedValue({});
     (computeQwenQuota as any).mockReturnValue({
@@ -72,6 +72,46 @@ describe("qwen-code provider", () => {
       right: "5/60",
       percentRemaining: 92,
     });
+  });
+
+  it("falls back to the legacy qwen auth key when the canonical key is absent", async () => {
+    const { readAuthFileCached } = await import("../src/lib/opencode-auth.js");
+    const { computeQwenQuota, readQwenLocalQuotaState } = await import("../src/lib/qwen-local-quota.js");
+
+    (readAuthFileCached as any).mockResolvedValue({
+      "opencode-qwencode-auth": { type: "oauth", access: "legacy-token" },
+    });
+    (readQwenLocalQuotaState as any).mockResolvedValue({});
+    (computeQwenQuota as any).mockReturnValue({
+      day: {
+        used: 1,
+        limit: 1000,
+        percentRemaining: 99,
+        resetTimeIso: "2026-02-25T00:00:00.000Z",
+      },
+      rpm: {
+        used: 1,
+        limit: 60,
+        percentRemaining: 98,
+        resetTimeIso: "2026-02-24T12:00:30.000Z",
+      },
+    });
+
+    const out = await qwenCodeProvider.fetch({ config: { toastStyle: "classic" } } as any);
+
+    expectAttemptedWithNoErrors(out);
+    expect(out.entries).toEqual([
+      {
+        name: "Qwen Free Daily",
+        percentRemaining: 99,
+        resetTimeIso: "2026-02-25T00:00:00.000Z",
+      },
+      {
+        name: "Qwen Free RPM",
+        percentRemaining: 98,
+        resetTimeIso: "2026-02-24T12:00:30.000Z",
+      },
+    ]);
   });
 
   it("matches qwen-code model ids", () => {

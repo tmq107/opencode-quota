@@ -2,19 +2,26 @@ import type { AuthData } from "./types.js";
 import { readAuthFileCached } from "./opencode-auth.js";
 
 export const DEFAULT_QWEN_AUTH_CACHE_MAX_AGE_MS = 5_000;
+const QWEN_AUTH_KEYS = ["qwen-code", "opencode-qwencode-auth"] as const;
 
 export type ResolvedQwenLocalPlan =
   | { state: "none" }
   | { state: "qwen_free"; accessToken: string };
 
 function getQwenOAuthAccessToken(auth: AuthData | null | undefined): string | null {
-  const qwen = auth?.["opencode-qwencode-auth"];
-  if (!qwen || qwen.type !== "oauth") {
-    return null;
+  for (const key of QWEN_AUTH_KEYS) {
+    const qwen = auth?.[key];
+    if (!qwen || qwen.type !== "oauth") {
+      continue;
+    }
+
+    const access = typeof qwen.access === "string" ? qwen.access.trim() : "";
+    if (access) {
+      return access;
+    }
   }
 
-  const access = typeof qwen.access === "string" ? qwen.access.trim() : "";
-  return access || null;
+  return null;
 }
 
 export function hasQwenOAuthAuth(auth: AuthData | null | undefined): boolean {

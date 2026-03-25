@@ -253,6 +253,9 @@ export interface AuthData {
   nanogpt?: NanoGptAuthData;
   "nano-gpt"?: NanoGptAuthData;
   cursor?: CursorOAuthAuthData;
+  // Canonical OpenCode provider id used by the Qwen auth plugin.
+  "qwen-code"?: QwenOAuthAuthData;
+  // Legacy package-name key kept for backward compatibility with older installs.
   "opencode-qwencode-auth"?: QwenOAuthAuthData;
   alibaba?: AlibabaAuthData;
   "alibaba-coding-plan"?: AlibabaAuthData;
