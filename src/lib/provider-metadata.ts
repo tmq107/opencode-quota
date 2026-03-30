@@ -10,6 +10,7 @@ export const QUOTA_PROVIDER_LABELS: Readonly<Record<string, string>> = {
   "alibaba-coding-plan": "Alibaba Coding Plan",
   zai: "Z.ai",
   nanogpt: "NanoGPT",
+  "minimax-coding-plan": "MiniMax Coding Plan",
 };
 
 export const QUOTA_PROVIDER_ID_SYNONYMS: Readonly<Record<string, string>> = {
@@ -24,6 +25,7 @@ export const QUOTA_PROVIDER_ID_SYNONYMS: Readonly<Record<string, string>> = {
   qwen: "qwen-code",
   alibaba: "alibaba-coding-plan",
   "nano-gpt": "nanogpt",
+  minimax: "minimax-coding-plan",
 };
 
 export function normalizeQuotaProviderId(id: string): string {

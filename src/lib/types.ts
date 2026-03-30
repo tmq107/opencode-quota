@@ -164,6 +164,12 @@ export interface NanoGptAuthData {
   key: string;
 }
 
+export interface MiniMaxAuthData {
+  type: string;
+  key?: string;
+  access?: string;
+}
+
 /**
  * Copilot subscription tier.
  * See: https://docs.github.com/en/copilot/about-github-copilot/subscription-plans-for-github-copilot
@@ -268,6 +274,7 @@ export interface AuthData {
     type: "api";
     key: string;
   };
+  "minimax-coding-plan"?: MiniMaxAuthData;
 }
 
 // =============================================================================
@@ -443,6 +450,23 @@ export type CopilotResult =
   | null;
 export type GoogleResult = GoogleQuotaResult | QuotaError | null;
 export type ZaiResult = ZaiQuotaResult | QuotaError | null;
+/** Single entry in a MiniMax quota result */
+export interface MiniMaxResultEntry {
+  name: string;
+  group?: string;
+  label?: string;
+  right?: string;
+  percentRemaining: number;
+  resetTimeIso?: string;
+}
+
+export type MiniMaxResult =
+  | {
+      success: true;
+      entries: MiniMaxResultEntry[];
+    }
+  | QuotaError
+  | null;
 export type ChutesResult =
   | {
     success: true;

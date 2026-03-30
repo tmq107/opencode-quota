@@ -18,6 +18,7 @@ describe("quota provider boundary", () => {
       "google-antigravity",
       "zai",
       "nanogpt",
+      "minimax-coding-plan",
     ]);
   });
 

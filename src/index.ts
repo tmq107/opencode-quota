@@ -20,6 +20,8 @@ export type {
   CopilotQuotaResult,
   GoogleQuotaResult,
   GoogleModelQuota,
+  MiniMaxResult,
+  MiniMaxResultEntry,
 } from "./lib/types.js";
 
 // NOTE: tool exports are part of the plugin runtime contract and are not
