@@ -10,6 +10,7 @@ describe("quota provider boundary", () => {
       "anthropic",
       "copilot",
       "openai",
+      "cloudflare-worker-ai",
       "cursor",
       "qwen-code",
       "alibaba-coding-plan",
