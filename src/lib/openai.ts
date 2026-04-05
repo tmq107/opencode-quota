@@ -94,7 +94,6 @@ function derivePlanLabel(planType: string | undefined): string {
 }
 
 const OPENAI_USAGE_URL = "https://chatgpt.com/backend-api/wham/usage";
-const OPENAI_USAGE_TIMEOUT_MS = 10_000;
 
 export type OpenAIResult =
   | {
@@ -149,7 +148,7 @@ export async function queryOpenAIQuota(): Promise<OpenAIResult> {
       headers["ChatGPT-Account-Id"] = accountId;
     }
 
-    const resp = await fetchWithTimeout(OPENAI_USAGE_URL, { headers }, OPENAI_USAGE_TIMEOUT_MS);
+    const resp = await fetchWithTimeout(OPENAI_USAGE_URL, { headers });
     if (!resp.ok) {
       const text = await resp.text();
       return {

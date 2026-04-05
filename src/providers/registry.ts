@@ -17,6 +17,7 @@ import { alibabaCodingPlanProvider } from "./alibaba-coding-plan.js";
 import { zaiProvider } from "./zai.js";
 import { nanoGptProvider } from "./nanogpt.js";
 import { minimaxCodingPlanProvider } from "./minimax-coding-plan.js";
+import { cloudflareWorkerAiProvider } from "./cloudflare-worker-ai.js";
 
 export function getProviders(): QuotaProvider[] {
   // Order here defines display ordering in the toast.
@@ -24,6 +25,7 @@ export function getProviders(): QuotaProvider[] {
     anthropicProvider,
     copilotProvider,
     openaiProvider,
+    cloudflareWorkerAiProvider,
     cursorProvider,
     qwenCodeProvider,
     alibabaCodingPlanProvider,
