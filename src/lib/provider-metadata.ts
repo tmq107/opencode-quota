@@ -1,6 +1,7 @@
 export const QUOTA_PROVIDER_LABELS: Readonly<Record<string, string>> = {
   anthropic: "Anthropic",
   openai: "OpenAI",
+  "cloudflare-worker-ai": "Cloudflare Worker AI",
   copilot: "Copilot",
   "google-antigravity": "Google",
   firmware: "Firmware",
@@ -26,6 +27,9 @@ export const QUOTA_PROVIDER_ID_SYNONYMS: Readonly<Record<string, string>> = {
   alibaba: "alibaba-coding-plan",
   "nano-gpt": "nanogpt",
   minimax: "minimax-coding-plan",
+  cloudflare: "cloudflare-worker-ai",
+  "workers-ai": "cloudflare-worker-ai",
+  "worker-ai": "cloudflare-worker-ai",
 };
 
 export function normalizeQuotaProviderId(id: string): string {

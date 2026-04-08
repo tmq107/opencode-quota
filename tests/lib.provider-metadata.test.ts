@@ -18,6 +18,8 @@ describe("provider-metadata", () => {
     expect(normalizeQuotaProviderId("qwen")).toBe("qwen-code");
     expect(normalizeQuotaProviderId("alibaba")).toBe("alibaba-coding-plan");
     expect(normalizeQuotaProviderId("nano-gpt")).toBe("nanogpt");
+    expect(normalizeQuotaProviderId("cloudflare")).toBe("cloudflare-worker-ai");
+    expect(normalizeQuotaProviderId("workers-ai")).toBe("cloudflare-worker-ai");
   });
 
   it("returns display labels for known providers", () => {
@@ -25,6 +27,7 @@ describe("provider-metadata", () => {
     expect(getQuotaProviderDisplayLabel("google-antigravity")).toBe("Google");
     expect(getQuotaProviderDisplayLabel("cursor")).toBe("Cursor");
     expect(getQuotaProviderDisplayLabel("alibaba-coding-plan")).toBe("Alibaba Coding Plan");
+    expect(getQuotaProviderDisplayLabel("cloudflare-worker-ai")).toBe("Cloudflare Worker AI");
     expect(getQuotaProviderDisplayLabel("zai")).toBe("Z.ai");
     expect(getQuotaProviderDisplayLabel("nanogpt")).toBe("NanoGPT");
     expect(getQuotaProviderDisplayLabel("something-else")).toBe("something-else");
